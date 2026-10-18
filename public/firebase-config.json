@@ -1,0 +1,10 @@
+{
+  "apiKey": "AIzaSyD2v8uBeh9m6pjMDlTm2rMIDFho1JGIeLo",
+  "authDomain": "mi-vida-bf920.firebaseapp.com",
+  "projectId": "mi-vida-bf920",
+  "storageBucket": "mi-vida-bf920.firebasestorage.app",
+  "messagingSenderId": "1028390090169",
+  "appId": "1:1028390090169:web:bf354d41d00a7d7db87268",
+  "googleSignIn": true,
+  "allowRegistration": false
+}

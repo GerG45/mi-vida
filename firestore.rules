@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/miVidaRecords/{recordId} {
+      function owner() { return request.auth != null && request.auth.uid == uid; }
+      function validRecord() {
+        return request.resource.data.keys().hasOnly(['value','deleted','updatedAt'])
+          && request.resource.data.keys().hasAll(['value','deleted','updatedAt'])
+          && request.resource.data.deleted is bool
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.updatedAt == request.time;
+      }
+      allow read: if owner();
+      allow create, update: if owner() && validRecord();
+      // Deletions are tombstone records so another device cannot revive a removed item.
+      allow delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

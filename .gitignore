@@ -1,0 +1,22 @@
+node_modules/
+dist/
+tmp/
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+*.log
+
+private/
+APK/
+android/
+node_modules/
+output/
+.env*
+!.env.example
+
+# Herramientas locales de la versión Android y lanzadores de Windows.
+*.bat
+capacitor.config.ts
+scripts/build-apk.ps1
