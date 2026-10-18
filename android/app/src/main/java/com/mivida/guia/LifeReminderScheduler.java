@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -22,7 +23,9 @@ import org.json.JSONObject;
 /** All operations share one lock; stale PendingIntents cannot deliver replaced records. */
 final class LifeReminderScheduler {
     static final String WAKE_CHANNEL = "mi_vida_wake_v1";
-    static final String REMINDER_CHANNEL = "mi_vida_reminders_v2";
+    static final String REMINDER_CHANNEL = "mi_vida_reminders_ding_v3";
+    private static final String LEGACY_REMINDER_CHANNEL = "mi_vida_reminders_v2";
+    private static final String WAKE_FALLBACK_CHANNEL = "mi_vida_wake_fallback_v1";
     static final String CHANGED = "com.mivida.guia.ALARM_CHANGED";
     static final int TEST_ID = -2147483000;
     static final int MAX_RECORDS = 200;
@@ -45,12 +48,31 @@ final class LifeReminderScheduler {
         wake.enableVibration(false);
         wake.setLockscreenVisibility(android.app.Notification.VISIBILITY_PRIVATE);
         manager.createNotificationChannel(wake);
-        NotificationChannel reminder = new NotificationChannel(REMINDER_CHANNEL, "Recordatorios puntuales", NotificationManager.IMPORTANCE_HIGH);
-        reminder.setDescription("Avisos sonoros de compromisos y actividades que activaste.");
-        reminder.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-            new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
-        reminder.enableVibration(true);
-        manager.createNotificationChannel(reminder);
+        // Android keeps channel sounds after creation. A new ID applies the chosen
+        // ding on upgrades, while an existing v3 keeps the user's later choices.
+        if (manager.getNotificationChannel(REMINDER_CHANNEL) == null) {
+            NotificationChannel previous = manager.getNotificationChannel(LEGACY_REMINDER_CHANNEL);
+            NotificationChannel reminder = new NotificationChannel(REMINDER_CHANNEL, "Recordatorios · tono suave",
+                previous == null ? NotificationManager.IMPORTANCE_HIGH : previous.getImportance());
+            reminder.setDescription("Compromisos y actividades con el tono ding de Mi Vida. El despertador usa el sonido de alarma del teléfono.");
+            reminder.setSound(previous != null && previous.getSound() == null ? null : reminderSound(context),
+                new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+            if (previous != null) {
+                reminder.setVibrationPattern(previous.getVibrationPattern());
+                reminder.enableVibration(previous.shouldVibrate());
+                reminder.enableLights(previous.shouldShowLights());
+                reminder.setLightColor(previous.getLightColor());
+                reminder.setShowBadge(previous.canShowBadge());
+                reminder.setLockscreenVisibility(previous.getLockscreenVisibility());
+                if (previous.getGroup() != null) reminder.setGroup(previous.getGroup());
+            } else reminder.enableVibration(true);
+            manager.createNotificationChannel(reminder);
+        }
+    }
+
+    private static Uri reminderSound(Context context) {
+        // Resource names remain stable when numeric resource IDs change on upgrade.
+        return Uri.parse("android.resource://" + context.getPackageName() + "/raw/mi_vida_reminder_ding");
     }
 
     static boolean notificationsEnabled(Context context) {
@@ -255,13 +277,26 @@ final class LifeReminderScheduler {
         }
     }
     static void notifyReminder(Context context, JSONObject current, boolean failedWake) {
-        NotificationCompat.Builder notification = new NotificationCompat.Builder(context, REMINDER_CHANNEL)
+        // A failed continuous wake alarm must never fall back to the secondary ding.
+        if (failedWake && Build.VERSION.SDK_INT >= 26) {
+            NotificationManager manager = context.getSystemService(NotificationManager.class);
+            if (manager.getNotificationChannel(WAKE_FALLBACK_CHANNEL) == null) {
+                NotificationChannel fallback = new NotificationChannel(WAKE_FALLBACK_CHANNEL, "Respaldo del despertador", NotificationManager.IMPORTANCE_HIGH);
+                fallback.setDescription("Aviso si Android no permite iniciar el despertador continuo.");
+                fallback.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                    new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+                fallback.enableVibration(true);
+                manager.createNotificationChannel(fallback);
+            }
+        }
+        NotificationCompat.Builder notification = new NotificationCompat.Builder(context, failedWake ? WAKE_FALLBACK_CHANNEL : REMINDER_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_life).setContentTitle(current.optString("title"))
             .setContentText(failedWake ? "No se pudo iniciar el sonido continuo. Revisá Mi Vida." : current.optString("body"))
             .setStyle(new NotificationCompat.BigTextStyle().bigText(current.optString("body")))
             .setCategory(failedWake ? NotificationCompat.CATEGORY_ALARM : NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND | NotificationCompat.DEFAULT_VIBRATE)
+            .setSound(failedWake ? RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) : reminderSound(context))
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setContentIntent(openApp(context, current.optInt("id")));
         NotificationManagerCompat.from(context).notify("mi_vida_reminder", current.optInt("id"), notification.build());
     }
