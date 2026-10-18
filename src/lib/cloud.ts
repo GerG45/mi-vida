@@ -4,10 +4,10 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWith
 import { getFirestore, collection, doc, onSnapshot, writeBatch, serverTimestamp, terminate, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { acknowledgeRecords, bindCloudWriter, decodeRecordId, getPendingRecords, getStorageError, getStoreScope, isLifeRecord, localDeviceRecords, queueLocalDeviceRecords, receiveCloudSnapshot, recordId, setStoreScope, type LifeRecord } from './lifeStore';
 
-export interface MiVidaFirebaseConfig extends FirebaseOptions { allowRegistration?: boolean; googleSignIn?: boolean; allowedEmail?: string }
+export interface MiVidaFirebaseConfig extends FirebaseOptions { allowRegistration?: boolean; emailPassword?: boolean; googleSignIn?: boolean; allowedEmail?: string }
 export type CloudMode = 'local'|'loading'|'offline'|'pending'|'synced'|'error';
-export interface CloudStatus { mode: CloudMode; configured: boolean; user: {uid:string;email:string|null}|null; initialSnapshot: boolean; accountEmpty: boolean; pendingCount: number; error: string|null; lastSyncedAt: string|null }
-let status: CloudStatus = {mode:'local',configured:false,user:null,initialSnapshot:false,accountEmpty:false,pendingCount:0,error:null,lastSyncedAt:null};
+export interface CloudStatus { mode: CloudMode; configured: boolean; user: {uid:string;email:string|null}|null; initialSnapshot: boolean; accountEmpty: boolean; pendingCount: number; googlePopupPending: boolean; error: string|null; lastSyncedAt: string|null }
+let status: CloudStatus = {mode:'local',configured:false,user:null,initialSnapshot:false,accountEmpty:false,pendingCount:0,googlePopupPending:false,error:null,lastSyncedAt:null};
 let config: MiVidaFirebaseConfig | null = null;
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -45,8 +45,12 @@ export function cloudError(error: unknown): string {
     'auth/email-already-in-use':'Este correo ya tiene una cuenta. Probá ingresar o recuperar la contraseña.',
     'auth/weak-password':'Elegí una contraseña de al menos 6 caracteres.', 'auth/operation-not-allowed':'Ese método de acceso todavía no está habilitado en Firebase.',
     'auth/unauthorized-domain':'Agregá este dominio a los dominios autorizados de Firebase Authentication.',
-    'auth/popup-blocked':'El navegador bloqueó la ventana de Google. Permití las ventanas emergentes o ingresá con correo.',
+    'auth/popup-blocked':'El navegador bloqueó la ventana de Google. Permití las ventanas emergentes o abrí Mi Vida en Chrome o Edge.',
     'auth/popup-closed-by-user':'Cerraste la ventana de Google antes de ingresar.', 'auth/network-request-failed':'No se pudo conectar. Revisá tu conexión.',
+    'app/google-timeout':'Google no terminó de abrir el acceso en 60 segundos. Abrí Mi Vida en Chrome o Edge y permití las ventanas emergentes. Todavía no se confirmó el ingreso.',
+    'app/operation-timeout':'La operación no terminó en 60 segundos. No se confirmó su resultado. Podés seguir usando Mi Vida y revisar el estado de tu cuenta.',
+    'app/wait-cancelled':'Dejaste de esperar. Si se abrió una ventana de Google, cerrala antes de volver a intentar. Esto no cancela una operación que el navegador ya esté completando.',
+    'app/google-in-progress':'Hay un acceso de Google pendiente en este navegador. Completá esa ventana o abrí Mi Vida en Chrome o Edge.',
     'auth/too-many-requests':'Hubo demasiados intentos. Esperá un momento e intentá de nuevo.',
     'permission-denied':'Firebase no autorizó leer o guardar tus datos. Revisá las reglas publicadas para este proyecto.',
     'failed-precondition':'La base de datos todavía no está lista. Revisá Firestore en el proyecto Mi Vida.',
@@ -61,7 +65,7 @@ export function validateFirebaseConfig(input: unknown): MiVidaFirebaseConfig {
   for (const key of ['apiKey','projectId','authDomain','appId']) if (typeof candidate[key] !== 'string' || !String(candidate[key]).trim()) throw new Error(`La configuración necesita ${key}.`);
   const clean: Record<string,unknown> = {};
   for (const key of ['apiKey','projectId','authDomain','appId','storageBucket','messagingSenderId','measurementId','databaseURL']) if (typeof candidate[key] === 'string') clean[key] = candidate[key];
-  for (const key of ['allowRegistration','googleSignIn']) if (typeof candidate[key] === 'boolean') clean[key] = candidate[key];
+  for (const key of ['allowRegistration','emailPassword','googleSignIn']) if (typeof candidate[key] === 'boolean') clean[key] = candidate[key];
   if (typeof candidate.allowedEmail === 'string') clean.allowedEmail = candidate.allowedEmail.trim().toLowerCase();
   return clean as unknown as MiVidaFirebaseConfig;
 }
@@ -130,7 +134,7 @@ async function initialize(next: MiVidaFirebaseConfig | null): Promise<void> {
   publish({configured:!!next,user:null,mode:'local',initialSnapshot:false,accountEmpty:false,pendingCount:0,error:null,lastSyncedAt:null});
   if (!next) return;
   try {
-    const {allowRegistration: _registration, googleSignIn: _google, allowedEmail: _email,...options} = next;
+    const {allowRegistration: _registration, emailPassword: _password, googleSignIn: _google, allowedEmail: _email,...options} = next;
     app = initializeApp(options,'mi-vida-web');auth = getAuth(app);db = getFirestore(app);
     stopAuth = onAuthStateChanged(auth,watchUser,error => publish({mode:'error',error:cloudError(error)}));
   } catch (error) { publish({mode:'error',error:cloudError(error)}); }
@@ -172,10 +176,19 @@ export async function setFirebaseConfig(input: unknown): Promise<void> {
 }
 function requireAuth(): Auth { if (!auth) throw new Error('Configurá Firebase antes de iniciar sesión.'); return auth; }
 function assertEmail(email: string): void { if (config?.allowedEmail && email.trim().toLowerCase() !== config.allowedEmail) throw new Error('Usá el correo habilitado para esta instalación.'); }
-export async function loginWithEmail(email: string,password: string): Promise<void> { assertEmail(email);await signInWithEmailAndPassword(requireAuth(),email.trim(),password); }
-export async function registerWithEmail(email: string,password: string): Promise<void> { if (!config?.allowRegistration) throw new Error('El registro no está habilitado. Usá tu cuenta creada en Firebase.');assertEmail(email);await createUserWithEmailAndPassword(requireAuth(),email.trim(),password); }
-export async function resetPassword(email: string): Promise<void> { assertEmail(email);await sendPasswordResetEmail(requireAuth(),email.trim()); }
-export async function loginWithGoogle(): Promise<void> { if (!config || config.googleSignIn === false) throw new Error('Google no está habilitado para esta instalación.');await signInWithPopup(requireAuth(),new GoogleAuthProvider()); }
+function assertNoPopup(): void { if (status.googlePopupPending) throw Object.assign(new Error('Hay un acceso de Google pendiente.'),{code:'app/google-in-progress'}); }
+function assertEmailPassword(): void { if (!config?.emailPassword) throw new Error('El acceso con correo y contraseña no está habilitado para esta instalación.');assertNoPopup(); }
+export async function loginWithEmail(email: string,password: string): Promise<void> { assertEmailPassword();assertEmail(email);await signInWithEmailAndPassword(requireAuth(),email.trim(),password); }
+export async function registerWithEmail(email: string,password: string): Promise<void> { assertEmailPassword();if (!config?.allowRegistration) throw new Error('El registro no está habilitado. Usá tu cuenta creada en Firebase.');assertEmail(email);await createUserWithEmailAndPassword(requireAuth(),email.trim(),password); }
+export async function resetPassword(email: string): Promise<void> { assertEmailPassword();assertEmail(email);await sendPasswordResetEmail(requireAuth(),email.trim()); }
+export async function loginWithGoogle(): Promise<void> {
+  if (!config || config.googleSignIn === false) throw new Error('Google no está habilitado para esta instalación.');
+  assertNoPopup();
+  const currentAuth = requireAuth();
+  publish({googlePopupPending:true});
+  try { await signInWithPopup(currentAuth,new GoogleAuthProvider()); }
+  finally { publish({googlePopupPending:false}); }
+}
 export async function logoutCloud(): Promise<void> { await signOut(requireAuth()); }
 export async function retryCloud(): Promise<void> { connectionFailed = false;if (auth?.currentUser) watchUser(auth.currentUser);else await flush(); }
 export async function uploadLocalDeviceData(): Promise<void> {

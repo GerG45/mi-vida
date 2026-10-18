@@ -6,7 +6,7 @@ El frontend puede publicarse en GitHub Pages. Firebase conserva los datos privad
 
 1. Crear en [Firebase Console](https://console.firebase.google.com/) un proyecto nuevo llamado **Mi Vida**. El identificador real es único y puede diferir del nombre.
 2. Registrar una aplicación web. Copiar su objeto `firebaseConfig` público (no una cuenta de servicio).
-3. En Authentication → Sign-in method, habilitar Email/Password. El usuario puede crear su propia cuenta desde Authentication → Users → Add user. La app no crea cuentas por sí sola. Para permitir registro desde la app, agregar `"allowRegistration": true` al JSON público.
+3. En Authentication → Sign-in method, habilitar Google y completar su correo de soporte. Email/Password es opcional: para mostrar correo, contraseña y recuperación, habilitar ese proveedor y agregar `"emailPassword": true` al JSON público. Para permitir también registro desde la app, agregar `"allowRegistration": true`. La app no crea cuentas sin una acción del usuario.
 4. En Authentication → Settings → Authorized domains, agregar el dominio de GitHub Pages, por ejemplo `usuario.github.io`. No se agrega la ruta del repositorio. Para pruebas locales, agregar `localhost` o `127.0.0.1` según corresponda.
 5. Crear **Cloud Firestore**, edición Standard, base `(default)`, en la región elegida por el usuario. Publicar el contenido de `firestore.rules` desde Rules. No usar reglas de prueba abiertas.
 6. Guardar el JSON web en `public/firebase-config.json` antes de compilar/publicar, o pegarlo en Ajustes → Configurar conexión Firebase. La configuración pegada se conserva sólo en ese navegador.
@@ -20,12 +20,13 @@ Ejemplo (completar con el proyecto real):
   "projectId": "mi-vida-id",
   "appId": "1:numero:web:identificador",
   "messagingSenderId": "numero",
+  "emailPassword": false,
   "allowRegistration": false,
-  "googleSignIn": false
+  "googleSignIn": true
 }
 ```
 
-Para Google, habilitar ese proveedor en Authentication, completar su correo de soporte y agregar `"googleSignIn": true`. La app usa popup; correo y contraseña siguen disponibles si el navegador bloquea popups.
+Google aparece salvo que se configure `"googleSignIn": false`. La app usa popup. Si una ventana no responde, libera la espera de la interfaz después de 60 segundos y permite **Dejar de esperar** antes; eso no cancela una operación que siga completándose en el navegador ni confirma un ingreso. Mientras Firebase mantiene un popup pendiente no se inicia un segundo acceso. Abrir el sitio en Chrome o Edge y permitir ventanas emergentes ayuda a comprobar navegadores integrados que no muestran el popup. Correo y contraseña sólo se ofrecen cuando `emailPassword` está habilitado explícitamente.
 
 `allowedEmail` puede limitar el formulario y rechazar otra cuenta en esta instalación. **No es una frontera de seguridad:** es configuración pública. Las reglas entregadas aíslan por `request.auth.uid == uid`. Si se necesita permitir un solo correo para todo el proyecto, agregar también esa condición a `owner()` en las reglas y publicarlas; no alcanza con editar el JSON del cliente.
 

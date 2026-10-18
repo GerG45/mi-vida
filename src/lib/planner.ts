@@ -359,7 +359,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
 
   if (weekday === 6) {
     push('rehearsal-out', 'Ir al ensayo en [LUGAR]', 990 - s.rehearsalTravelMin, 990, 'travel', `${s.rehearsalTravelMin} min de ida configurados.`, true);
-    push('navegantes', 'Ensayo [ENSAYO] · [LUGAR]', 990, 1140, 'work', 'Ensayo confirmado todos los sábados, 16:30–19:00.', true, false);
+    push('saturday-rehearsal', 'Ensayo [ENSAYO] · [LUGAR]', 990, 1140, 'work', 'Ensayo confirmado todos los sábados, 16:30–19:00.', true, false);
     push('rehearsal-back', 'Volver del ensayo', 1140, 1140 + s.rehearsalTravelMin, 'travel', `${s.rehearsalTravelMin} min de regreso configurados.${week==='A'?' Regreso con [PEQUE] después del intercambio.':''}`, true, false, week === 'A');
   }
 

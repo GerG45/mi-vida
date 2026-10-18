@@ -221,8 +221,8 @@ test('excepciones cambian quién lleva y jardín cerrado elimina viajes escolare
 test('ensayo todos los sábados y cuidado A desde19, domingo A todo el día', () => {
   for (const date of ['2026-10-17', '2026-10-24']) {
     const day = buildDay(date, settings(), {}, []);
-    assert.equal(day.events.find(e => e.id === 'navegantes').start, 990);
-    assert.equal(day.events.find(e => e.id === 'navegantes').end, 1140);
+    assert.equal(day.events.find(e => e.id === 'saturday-rehearsal').start, 990);
+    assert.equal(day.events.find(e => e.id === 'saturday-rehearsal').end, 1140);
   }
   const saturdayA = buildDay('2026-10-17', settings(), {}, []);
   assert.equal(saturdayA.events.find(e => e.id.startsWith('care-')).start, 1140);
