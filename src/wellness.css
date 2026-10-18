@@ -1,4 +1,21 @@
 /* A quieter visual layer. All tools and layouts keep their original structure. */
+.brand-full-logo { display:block; width:182px; max-width:100%; height:auto; }
+.brand-symbol-logo { display:none; }
+.mobile-logo img { display:block; width:112px; height:auto; }
+.sleep-line small { display:block; line-height:1.6; }
+.previous-night-note { display:block; margin-top:12px; color:#85917d; font-size:10px; line-height:1.6; }
+.sleep-conflict { padding:10px 12px; background:#f7eddb; border-radius:10px; font-size:11px; line-height:1.6; }
+.calendar-sleep { display:flex; align-items:center; gap:6px; font-size:10px; color:#7c806f; }
+@media(max-width:850px) {
+  .brand-full-logo { display:none; }
+  .brand-symbol-logo { display:block; width:44px; height:44px; }
+}
+@media(max-width:650px) {
+  .wake-card .previous-night-note, .wake-card .sleep-conflict, .wake-card .breakfast-cue { grid-column:1 / -1; }
+  .wake-card .previous-night-note { grid-row:6; }
+  .wake-card .breakfast-cue { grid-row:5; }
+  .wake-card .sleep-conflict { grid-row:7; }
+}
 :root {
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   --ink: #18362c;

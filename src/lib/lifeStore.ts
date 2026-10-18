@@ -55,8 +55,9 @@ function normalizedEntry(section: string, key: string, value: unknown): unknown 
     if (section === 'profile') { if (!text(value,200)) throw new Error('Perfil no válido.');return value; }
     if (['gymDays','mealPrepDays'].includes(key)) { if (!weekdays(value)) throw new Error(`Días no válidos para ${key}.`); }
     else if (key === 'anchorMonday') { if (!date(value)) throw new Error('Fecha de referencia no válida.'); }
-    else if (['preferredBedtime','defaultWake','schoolStart','cordobaArrival','recordingStart','mondayEveningStart','mondayEveningEnd'].includes(key)) { if (!time(value)) throw new Error(`Hora no válida para ${key}.`); }
+    else if (['preferredBedtime','defaultWake','schoolStart','cordobaArrival','recordingStart','mondayEveningStart','mondayEveningEnd','mondaySoloDeparture','mondaySoloArrival'].includes(key)) { if (!time(value)) throw new Error(`Hora no válida para ${key}.`); }
     else if (['mealPrepTuesdayStart','mealPrepFridayStart'].includes(key)) { if (value !== '' && !time(value)) throw new Error(`Hora de cocina no válida para ${key}.`); }
+    else if (['homeMapsUrl','gymMapsUrl','workMapsUrl','mondayRehearsalMapsUrl'].includes(key)) { if (!text(value,2000)) throw new Error('Enlace de ubicación no válido.');if(value !== '') { let url;try { url=new URL(value); } catch { throw new Error('Enlace de ubicación no válido.'); }if(url.protocol !== 'https:' || url.username || url.password) throw new Error('Usá un enlace HTTPS de ubicación.'); } }
     else if (key === 'recordingCare') { if (!oneOf(value,['pending','withMe','covered'])) throw new Error('Cuidado de grabación no válido.'); }
     else if (key === 'danceTransport') { if (!oneOf(value,['pending','me','other'])) throw new Error('Traslado no válido.'); }
     else if (key === 'recordingDay') { if (!Number.isInteger(value) || !finite(value,0,6)) throw new Error('Día de grabación no válido.'); }
@@ -72,7 +73,7 @@ function normalizedEntry(section: string, key: string, value: unknown): unknown 
     return value;
   }
   if (section === 'overrides') {
-    if (!date(key) || Object.keys(value).some(field => !['schoolClosed','dropoff','pickup','care'].includes(field)) || (value.schoolClosed !== undefined && typeof value.schoolClosed !== 'boolean') || ['dropoff','pickup','care'].some(field => value[field] !== undefined && !oneOf(value[field],['auto','me','other']))) throw new Error('Cambio de fecha no válido.');
+    if (!date(key) || Object.keys(value).some(field => !['schoolClosed','dropoff','pickup','care','skipPewen'].includes(field)) || (value.schoolClosed !== undefined && typeof value.schoolClosed !== 'boolean') || (value.skipPewen !== undefined && typeof value.skipPewen !== 'boolean') || ['dropoff','pickup','care'].some(field => value[field] !== undefined && !oneOf(value[field],['auto','me','other']))) throw new Error('Cambio de fecha no válido.');
     return value;
   }
   if (section === 'journal') {

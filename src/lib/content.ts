@@ -34,7 +34,7 @@ export const menu: MealDay[] = [
     lunch: 'Huevos con tostadas y fruta, o yogur con avena y fruta.',
     snack: 'Yogur y un puñado pequeño de maní o nueces.',
     dinner: 'Bowl recién hecho de pollo, arroz y verduras.',
-    mealNote: 'Cocina por la tarde o noche: pollo, arroz, verduras, guiso de lentejas y huevos. Congelá hoy el bowl del viernes y el guiso de emergencia.',
+    mealNote: 'En tu tanda de cocina: pollo, arroz, verduras, guiso de lentejas y huevos. Consultá el horario reservado arriba. Congelá hoy el bowl del viernes y el guiso de emergencia.',
   },
   {
     breakfast: 'Yogur, avena, manzana cortada y canela.',
@@ -55,7 +55,7 @@ export const menu: MealDay[] = [
     lunch: 'Bowl de pollo, arroz y verduras congelado el martes y descongelado desde el jueves.',
     snack: 'Fruta, mate o café y una tostada.',
     dinner: 'Hamburguesa recién hecha, puré mixto y tomate u hojas verdes.',
-    mealNote: 'Cocina de reposición: salsa de carne, hamburguesas y puré. Separá y congelá las porciones del lunes antes de servir la cena.',
+    mealNote: 'En tu tanda de reposición: salsa de carne, hamburguesas y puré. Consultá el horario reservado arriba. Separá las porciones del lunes y congelalas al terminar la preparación.',
   },
   {
     breakfast: 'Huevos revueltos, tostadas y fruta.',
@@ -63,6 +63,58 @@ export const menu: MealDay[] = [
     snack: 'Yogur con avena o maní.',
     dinner: 'Wrap de hamburguesa casera con verduras y queso.',
     mealNote: 'Usá las bases del viernes que quedaron en la heladera; las terminaciones frescas del plan llevan entre 5 y 12 minutos.',
+  },
+];
+
+export type BreakfastOption = {
+  id: string;
+  title: string;
+  duration: string;
+  /** Either appliance can prepare these alternatives. */
+  appliances: ('blender' | 'handBlender')[];
+  /** IDs from the existing shopping list; alternatives replace the base breakfast. */
+  ingredientIds: string[];
+  ingredients: string;
+  steps: string[];
+};
+
+/** Optional homemade alternatives, separate from the source document's base menu. */
+export const breakfastOptions: BreakfastOption[] = [
+  {
+    id: 'licuado-banana-avena',
+    title: 'Licuado de banana y avena',
+    duration: 'Unos 5 minutos',
+    appliances: ['blender', 'handBlender'],
+    ingredientIds: ['fruta', 'yogur', 'avena', 'condimentos'],
+    ingredients: 'Banana, yogur, avena, agua y canela a gusto.',
+    steps: [
+      'Poné la banana, el yogur y la avena en el vaso. Sumá un poco de agua para ajustar la textura.',
+      'Licuá o procesá con la minipimer hasta integrar. Agregá canela si te gusta.',
+    ],
+  },
+  {
+    id: 'panqueques-banana-avena',
+    title: 'Panqueques de banana y avena',
+    duration: 'Unos 12 minutos',
+    appliances: ['blender', 'handBlender'],
+    ingredientIds: ['fruta', 'huevos', 'avena', 'aceite'],
+    ingredients: 'Banana, huevo, avena y unas gotas de aceite para la sartén.',
+    steps: [
+      'Procesá banana, huevo y avena hasta formar una mezcla espesa.',
+      'Cociná panqueques pequeños en una sartén apenas aceitada, de ambos lados, hasta que el centro quede completamente cocido.',
+    ],
+  },
+  {
+    id: 'bowl-yogur-mani',
+    title: 'Bowl cremoso de yogur y maní',
+    duration: 'Unos 5 minutos',
+    appliances: ['blender', 'handBlender'],
+    ingredientIds: ['yogur', 'mantequilla-mani', 'fruta', 'avena'],
+    ingredients: 'Yogur, mantequilla de maní, fruta y avena.',
+    steps: [
+      'Integrá el yogur con la mantequilla de maní usando la licuadora o la minipimer.',
+      'Serví en un bowl y agregá fruta cortada y avena por encima.',
+    ],
   },
 ];
 

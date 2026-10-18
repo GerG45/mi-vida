@@ -15,6 +15,27 @@ async function store() {
 }
 const settings = {childName:'tu peque',scheduleEnabled:false,gymDays:[1,3,5],schoolStart:'07:45',preparationMin:20,sleepHours:8,anchorMonday:'2026-10-12'};
 
+test('la excepción de Pewen se guarda por fecha sin borrar el cuidado familiar',async () => {
+  const s = await store();
+  s.useLifeState('overrides',{});
+  s.restoreLifeBackup({version:1,sections:{overrides:{'2026-10-19':{skipPewen:true,pickup:'other',care:'auto'}}}});
+  assert.deepEqual(s.useLifeState('overrides',{})[0]['2026-10-19'],{skipPewen:true,pickup:'other',care:'auto'});
+  assert.throws(() => s.restoreLifeBackup({version:1,sections:{overrides:{'2026-10-19':{skipPewen:'true'}}}}));
+  assert.throws(() => s.restoreLifeBackup({version:1,sections:{overrides:{'2026-10-19':{unknown:true}}}}));
+});
+
+test('desayuno, equipos y enlaces privados aceptan una copia parcial y rechazan enlaces inseguros',async () => {
+  const s = await store();
+  const config={...settings,breakfastCreatine:false,hasBlender:false,hasHandBlender:false,homeMapsUrl:'',gymMapsUrl:'',workMapsUrl:'',mondayRehearsalMapsUrl:'',mondaySoloDeparture:'16:00',mondaySoloArrival:'17:00'};
+  s.useLifeState('settings',config);
+  s.restoreLifeBackup({version:1,sections:{settings:{breakfastCreatine:true,hasBlender:true,hasHandBlender:true,homeMapsUrl:'https://maps.google.com/'}}});
+  const saved=s.useLifeState('settings',config)[0];
+  assert.equal(saved.breakfastCreatine,true);
+  assert.equal(saved.homeMapsUrl,'https://maps.google.com/');
+  assert.equal(saved.schoolStart,'07:45');
+  for(const changes of [{breakfastCreatine:'true'},{hasBlender:1},{homeMapsUrl:'javascript:alert(1)'},{gymMapsUrl:'http://example.com'},{workMapsUrl:'https://user:password@example.com'},{mondaySoloArrival:'29:00'}]) assert.throws(() => s.restoreLifeBackup({version:1,sections:{settings:changes}}));
+});
+
 test('diff por entrada conserva otras fechas y genera tombstones',async () => {
   const s = await store();
   const changes = s.diffSection('done',{'2026-10-18:a':true,'2026-10-19:b':false},{'2026-10-18:a':true,'2026-10-20:c':true},10);

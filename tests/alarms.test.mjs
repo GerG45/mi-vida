@@ -7,11 +7,12 @@ const transpile = source => ts.transpileModule(source,{compilerOptions:{target:t
 const data = code => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 const plannerUrl = data(transpile(await fs.readFile(new URL('../src/lib/planner.ts',import.meta.url),'utf8')));
 const planner = await import(plannerUrl);
+const sleepUrl = data(transpile(await fs.readFile(new URL('../src/lib/sleep.ts',import.meta.url),'utf8')).replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`));
 const alarmsSource = transpile(await fs.readFile(new URL('../src/lib/alarms.ts',import.meta.url),'utf8'));
 let moduleId=0;
 async function api(plugin={}) {
   globalThis.__alarmPlugin=plugin;
-  const source=alarmsSource.replace(/import\s*\{[^}]+\}\s*from\s*['"]@capacitor\/core['"];?/, 'const Capacitor={isNativePlatform:()=>false,getPlatform:()=>"web"}; const registerPlugin=()=>globalThis.__alarmPlugin;').replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`);
+  const source=alarmsSource.replace(/import\s*\{[^}]+\}\s*from\s*['"]@capacitor\/core['"];?/, 'const Capacitor={isNativePlatform:()=>false,getPlatform:()=>"web"}; const registerPlugin=()=>globalThis.__alarmPlugin;').replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/,`from '${sleepUrl}'`);
   return import(data(source)+`#${++moduleId}`);
 }
 const alarms=await api();
@@ -28,6 +29,35 @@ test('alarma del lunes B usa el despertar calculado de las 06:45',()=>{
   assert.equal(batch.through,'2026-11-01');
 });
 
+test('acostarse del domingo usa las 22:45 reales del domingo antes del lunes B, sin adelanto de agenda',()=>{
+  const preferences=prefs({bedtime:true,beforeMin:60,categories:[]});
+  const batch=alarms.buildAlarmBatch({settings,preferences,now:localEpoch(18)});
+  const first=batch.preview.find(alarm=>alarm.key==='bedtime:2026-10-19');
+  assert.equal(first.at,localEpoch(18,22,45));
+  assert.equal(first.kind,'reminder');
+  assert.equal(first.source,'bedtime');
+  assert.match(first.body,/06:45/);
+  assert(batch.preview.every(alarm=>alarm.source==='bedtime'));
+  const changed=alarms.buildAlarmBatch({settings:{...settings,sleepHours:7},preferences,now:localEpoch(18)}).preview.find(alarm=>alarm.key===first.key);
+  assert.equal(changed.at,localEpoch(18,23,45));
+  assert.equal(changed.id,first.id,'el aviso del mismo despertar se actualiza sin acumular otro ID');
+});
+
+test('acostarse después de medianoche conserva la fecha y se encuentra al abrir la app ya pasada medianoche',()=>{
+  const config={...settings,sleepHours:7.5};
+  const beforeMidnight=alarms.buildAlarmBatch({settings:config,preferences:prefs({bedtime:true}),now:localEpoch(23,23,50)});
+  const afterMidnight=alarms.buildAlarmBatch({settings:config,preferences:prefs({bedtime:true}),now:localEpoch(24,0,10)});
+  const before=beforeMidnight.preview.find(alarm=>alarm.key==='bedtime:2026-10-24');
+  const after=afterMidnight.preview.find(alarm=>alarm.key==='bedtime:2026-10-24');
+  assert.equal(before.at,localEpoch(24,0,30));
+  assert.equal(after.at,before.at);
+  assert.equal(after.id,before.id);
+  assert(afterMidnight.preview.every(alarm=>planner.isoDate(new Date(alarm.at))<=afterMidnight.through));
+  const disabled=alarms.buildAlarmBatch({settings:{...config,scheduleEnabled:false},preferences:prefs({bedtime:true}),now:localEpoch(24,0,10)});
+  assert.equal(disabled.notifications.length,0);
+  assert.equal(alarms.buildAlarmBatch({settings:config,preferences:prefs(),now:localEpoch(24,0,10)}).notifications.length,0);
+});
+
 test('excluye avisos pasados, bloques de cuidado y compromisos completados',()=>{
   const before=alarms.buildAlarmBatch({settings,preferences:prefs({agenda:true,beforeMin:0}),now:localEpoch(19,7,20)});
   assert(before.preview.length>0);
@@ -36,6 +66,37 @@ test('excluye avisos pasados, bloques de cuidado y compromisos completados',()=>
   assert(before.preview.some(alarm=>alarm.key==='agenda:2026-10-19:school-dropoff'));
   const done=alarms.buildAlarmBatch({settings,preferences:prefs({agenda:true,beforeMin:0}),now:localEpoch(19,7,20),done:{'2026-10-19:school-dropoff':true}});
   assert(!done.preview.some(alarm=>alarm.key==='agenda:2026-10-19:school-dropoff'));
+});
+
+test('creatina avisa una vez por desayuno, sin adelanto ni categorías de agenda, también en descanso',()=>{
+  for(const breakfastInPreparation of [true,false]) {
+    const config={...settings,breakfastCreatine:true,breakfastInPreparation,gymDays:[2,3,4,5,6]};
+    const batch=alarms.buildAlarmBatch({settings:config,preferences:prefs({creatine:true,beforeMin:60,categories:[]}),now:localEpoch(19)});
+    assert.equal(batch.preview.length,14);
+    assert(batch.preview.every(alarm=>alarm.source==='creatine' && alarm.kind==='reminder'));
+    assert.equal(new Set(batch.preview.map(alarm=>alarm.key)).size,14);
+    for(const alarm of batch.preview) {
+      const date=alarm.key.slice('creatine:'.length);
+      const breakfast=planner.buildDay(date,config,{},[]).events.find(event=>event.id==='meal-breakfast');
+      assert.equal(alarm.at,alarms.alarmEpoch(date,planner.formatTime(breakfast.start)));
+      assert.equal(alarm.title,'Creatina con el desayuno');
+    }
+    assert(batch.preview.some(alarm=>alarm.key==='creatine:2026-10-25'));
+  }
+});
+
+test('creatina respeta el desayuno completado y los tres interruptores de agenda, rutina y aviso',()=>{
+  const config={...settings,breakfastCreatine:true};
+  const preferences=prefs({creatine:true});
+  const batch=alarms.buildAlarmBatch({settings:config,preferences,now:localEpoch(19),done:{'2026-10-19:meal-breakfast':true}});
+  assert.equal(batch.preview.length,13);
+  assert(!batch.preview.some(alarm=>alarm.key==='creatine:2026-10-19'));
+  for(const patch of [{scheduleEnabled:false},{breakfastCreatine:false}]) {
+    assert.equal(alarms.buildAlarmBatch({settings:{...config,...patch},preferences,now:localEpoch(19)}).notifications.length,0);
+  }
+  assert.equal(alarms.buildAlarmBatch({settings:config,preferences:prefs(),now:localEpoch(19)}).notifications.length,0);
+  const afterBreakfast=alarms.buildAlarmBatch({settings:config,preferences,now:localEpoch(19,8)});
+  assert(!afterBreakfast.preview.some(alarm=>alarm.key==='creatine:2026-10-19'));
 });
 
 test('los IDs permanecen estables al agregar otra alarma o avanzar el reloj',()=>{
@@ -68,12 +129,18 @@ test('el límite de 200 reserva las alarmas puntuales y conserva orden cronológ
 
 test('ajustes locales separados por cuenta y valores importados estrictos',()=>{
   const items=new Map();globalThis.localStorage={getItem:key=>items.get(key)||null,setItem:(key,value)=>items.set(key,value)};
-  alarms.saveAlarmPreferences('project:A',prefs({wake:true}));
+  alarms.saveAlarmPreferences('project:A',prefs({wake:true,bedtime:true,creatine:true}));
   assert.equal(alarms.loadAlarmPreferences('project:A').wake,true);
+  assert.equal(alarms.loadAlarmPreferences('project:A').creatine,true);
+  assert.equal(alarms.loadAlarmPreferences('project:A').bedtime,true);
   assert.equal(alarms.loadAlarmPreferences('project:B').wake,false);
+  assert.equal(alarms.loadAlarmPreferences('project:B').creatine,false);
+  assert.equal(alarms.loadAlarmPreferences('project:B').bedtime,false);
   assert.equal(alarms.loadAlarmPreferences(null).wake,false);
-  const invalid=alarms.normalizeAlarmPreferences({wake:'true',agenda:1,beforeMin:1000,categories:['care','work'],custom:[{id:'x',title:'Imposible',date:'2026-02-31',time:'10:00',kind:'wake'}]});
-  assert.equal(invalid.wake,false);assert.equal(invalid.agenda,false);assert.equal(invalid.beforeMin,60);
+  assert.equal(alarms.normalizeAlarmPreferences({wake:true,agenda:true}).creatine,false);
+  assert.equal(alarms.normalizeAlarmPreferences({wake:true,agenda:true}).bedtime,false);
+  const invalid=alarms.normalizeAlarmPreferences({wake:'true',bedtime:'true',agenda:1,creatine:'true',beforeMin:1000,categories:['care','work'],custom:[{id:'x',title:'Imposible',date:'2026-02-31',time:'10:00',kind:'wake'}]});
+  assert.equal(invalid.wake,false);assert.equal(invalid.bedtime,false);assert.equal(invalid.agenda,false);assert.equal(invalid.creatine,false);assert.equal(invalid.beforeMin,60);
   assert.deepEqual(invalid.categories,['work']);assert.deepEqual(invalid.custom,[]);
 });
 

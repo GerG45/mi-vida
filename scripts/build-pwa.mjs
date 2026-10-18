@@ -1,8 +1,17 @@
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
-const assets=await fs.readdir('dist/assets');
-const files=['./','index.html','icon.svg','manifest.webmanifest',...assets.map(f=>'assets/'+f)];
-const version=crypto.createHash('sha256').update(files.join('|')).digest('hex').slice(0,12);
+async function staticFiles(directory='dist',prefix='') {
+  const entries=await fs.readdir(directory,{withFileTypes:true});
+  const nested=await Promise.all(entries.map(entry=>entry.isDirectory()
+    ? staticFiles(directory+'/'+entry.name,prefix+entry.name+'/')
+    : entry.name==='sw.js'||entry.name==='firebase-config.json' ? [] : [prefix+entry.name]));
+  return nested.flat().sort();
+}
+const paths=await staticFiles();
+const files=['./',...paths];
+const hash=crypto.createHash('sha256');
+for(const path of paths) hash.update(path).update(await fs.readFile('dist/'+path));
+const version=hash.digest('hex').slice(0,12);
 const worker=`const CACHE='mi-vida-${version}';const FILES=${JSON.stringify(files)};
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES.map(f=>new URL(f,self.registration.scope).href)))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('mi-vida-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

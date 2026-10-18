@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="48" fill="#141c25"/><path d="M41 116a55 55 0 0 1 110 0" stroke="#d3e7b0" stroke-width="12" fill="none"/><circle cx="96" cy="109" r="17" fill="#bdadf0"/><path d="M35 135h122" stroke="#d3e7b0" stroke-width="9" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+<title>Mi Vida. - favicon redondo</title><desc>Ícono circular minimalista con brote de dos hojas y punto superior.</desc>
+<circle cx="512" cy="512" r="354" fill="#F3F1EA"/><circle cx="392" cy="420" r="58" fill="#9CAF84"/>
+<path d="M513.5 705 C 470 710, 421 697, 382 662 C 335 620, 306 562, 296 512 C 350 511, 402 523, 445 553 C 489 584, 521 632, 533 695 C 526 700, 520 703, 513.5 705 Z" fill="#284638"/>
+<path d="M514 707 C 516 637, 534 577, 572 523 C 616 461, 678 420, 724 397 C 730 455, 722 517, 694 576 C 664 638, 617 686, 550 719 C 538 714, 526 710, 514 707 Z" fill="#284638"/>
+<path d="M500 705 C 500 738, 500 780, 500 836 L 500 866 L 540 866 L 540 836 C 540 778, 540 735, 540 702 C 540 680, 533 661, 520 644 C 507 661, 500 681, 500 705 Z" fill="#284638"/>
+</svg>

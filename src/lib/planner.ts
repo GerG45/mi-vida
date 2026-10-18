@@ -13,6 +13,13 @@ export type Settings = {
   recordingDay: number;
   preparationConfirmed: boolean;
   breakfastInPreparation: boolean;
+  breakfastCreatine: boolean;
+  hasBlender: boolean;
+  hasHandBlender: boolean;
+  homeMapsUrl: string;
+  gymMapsUrl: string;
+  workMapsUrl: string;
+  mondayRehearsalMapsUrl: string;
   preparationMin: number;
   morningBufferMin: number;
   sleepHours: number;
@@ -30,6 +37,8 @@ export type Settings = {
   mondayEveningStart: string;
   mondayEveningEnd: string;
   mondayEveningTravelMin: number;
+  mondaySoloDeparture: string;
+  mondaySoloArrival: string;
   mondayReturnCompanion: string;
   mondayReturnTravelConfirmed: boolean;
   recordingStart: string;
@@ -63,6 +72,8 @@ export type ExtraEvent = {
 };
 
 export type DayOverride = {
+  /** This Monday only: skip the usual office trip, without moving it to another day. */
+  skipPewen?: boolean;
   schoolClosed?: boolean;
   care?: 'auto' | 'me' | 'other';
   dropoff?: 'auto' | 'me' | 'other';
@@ -110,6 +121,13 @@ export const defaults: Settings = {
   recordingDay: 3,
   preparationConfirmed: false,
   breakfastInPreparation: true,
+  breakfastCreatine: false,
+  hasBlender: false,
+  hasHandBlender: false,
+  homeMapsUrl: '',
+  gymMapsUrl: '',
+  workMapsUrl: '',
+  mondayRehearsalMapsUrl: '',
   preparationMin: 20,
   morningBufferMin: 10,
   sleepHours: 8,
@@ -127,6 +145,8 @@ export const defaults: Settings = {
   mondayEveningStart: '16:30',
   mondayEveningEnd: '20:00',
   mondayEveningTravelMin: 0,
+  mondaySoloDeparture: '16:00',
+  mondaySoloArrival: '17:00',
   mondayReturnCompanion: 'Compañía a confirmar',
   mondayReturnTravelConfirmed: false,
   recordingStart: '15:00',
@@ -208,6 +228,15 @@ function weekdayList(value: unknown, fallback: number[]): number[] {
   return Array.isArray(value) ? [...new Set(value.filter((v): v is number => Number.isInteger(v) && v >= 0 && v <= 6))] : [...fallback];
 }
 
+/** Stored location links are optional and must never introduce active URL schemes. */
+export function normalizeMapsUrl(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length > 2000) return '';
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' && !url.username && !url.password && url.href.length <= 2000 ? url.href : '';
+  } catch { return ''; }
+}
+
 function normalize(input: Settings): Settings {
   const raw = input && typeof input === 'object' ? input : {} as Settings;
   const s = { ...defaults, ...raw };
@@ -219,11 +248,12 @@ function normalize(input: Settings): Settings {
     'gymDurationMin', 'gymTravelMin', 'showerMin', 'mealPrepDurationMin', 'flexibleWorkMin', 'rehearsalTravelMin', 'danceTravelMin',
   ] as const;
   for (const key of numeric) s[key] = number(s[key], defaults[key]);
-  for (const key of ['breakfastInPreparation', 'cookingWithChild'] as const) s[key] = typeof s[key] === 'boolean' ? s[key] : defaults[key];
+  for (const key of ['breakfastInPreparation', 'breakfastCreatine', 'hasBlender', 'hasHandBlender', 'cookingWithChild'] as const) s[key] = typeof s[key] === 'boolean' ? s[key] : defaults[key];
+  for (const key of ['homeMapsUrl','gymMapsUrl','workMapsUrl','mondayRehearsalMapsUrl'] as const) s[key] = normalizeMapsUrl(s[key]);
   s.recordingDay = number(s.recordingDay, defaults.recordingDay, 0, 6);
   s.sleepHours = typeof s.sleepHours === 'number' && Number.isFinite(s.sleepHours) ? Math.min(12, Math.max(4, s.sleepHours)) : defaults.sleepHours;
   s.anchorMonday = validDate(s.anchorMonday) ? s.anchorMonday : defaults.anchorMonday;
-  for (const key of ['schoolStart', 'cordobaArrival', 'recordingStart', 'defaultWake', 'preferredBedtime', 'mondayEveningStart', 'mondayEveningEnd'] as const) s[key] = formatTime(time(s[key], defaults[key]));
+  for (const key of ['schoolStart', 'cordobaArrival', 'recordingStart', 'defaultWake', 'preferredBedtime', 'mondayEveningStart', 'mondayEveningEnd', 'mondaySoloDeparture', 'mondaySoloArrival'] as const) s[key] = formatTime(time(s[key], defaults[key]));
   for (const key of ['mealPrepTuesdayStart','mealPrepFridayStart'] as const) s[key] = typeof s[key] === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s[key]) ? s[key] : '';
   s.gymDays = weekdayList(s.gymDays, defaults.gymDays);
   s.mealPrepDays = weekdayList(s.mealPrepDays, defaults.mealPrepDays);
@@ -266,6 +296,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   if (!s.scheduleEnabled) return {date, week: weekForDate(date,s.anchorMonday),wakeTime: time(s.defaultWake,defaults.defaultWake),bedtimePrevious: ((time(s.defaultWake,defaults.defaultWake)-s.sleepHours*60)%1440+1440)%1440,events:[],warnings:[],pending:['Importá tus horarios o activá tu agenda en Ajustes. Los datos de ejemplo todavía no están en uso.'],care:'Completá tu organización familiar para empezar.'};
   const week = weekForDate(date, s.anchorMonday);
   const override = (overrides && typeof overrides === 'object' && overrides[date]) || {};
+  const skipPewen = weekday === 1 && override.skipPewen === true;
   const events: PlanEvent[] = [];
   const warnings: string[] = [];
   const pending: string[] = [];
@@ -284,18 +315,18 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   if (!validDate(dateISO)) warnings.push('La fecha no era válida; se muestra el lunes 19/10/2026 como referencia.');
   if (!s.familyConfirmed) pending.push('Confirmar la alternancia familiar. Los cuidados se muestran como simulación.');
   if (!s.preparationConfirmed) pending.push('Confirmar cuánto tardás en prepararte: el despertar usa una duración de ejemplo.');
-  if (weekday === 1 && !s.cordobaConfirmed) pending.push('Confirmar llegada y viaje a [DESTINO]: se muestran horarios de ejemplo.');
-  if (weekday === 1 && !s.cordobaEndConfirmed) pending.push(s.mondayEveningEnabled
+  if (weekday === 1 && !skipPewen && !s.cordobaConfirmed) pending.push('Confirmar llegada y viaje a [DESTINO]: se muestran horarios de ejemplo.');
+  if (weekday === 1 && !skipPewen && !s.cordobaEndConfirmed) pending.push(s.mondayEveningEnabled
     ? 'Confirmar a qué hora terminás de trabajar en [DESTINO]: la jornada sigue siendo tentativa; el ensayo de la tarde conserva su horario.'
     : 'Confirmar a qué hora terminás en [DESTINO]: trabajo, regreso y huecos posteriores son tentativos.');
-  if (weekday === 1 && s.mondayEveningEnabled && s.mondayEveningTravelMin === 0) pending.push('Confirmar el traslado entre el trabajo y el ensayo del lunes; por ahora no se reserva tiempo de viaje.');
+  if (weekday === 1 && s.mondayEveningEnabled && !skipPewen && s.mondayEveningTravelMin === 0) pending.push('Confirmar el traslado entre el trabajo y el ensayo del lunes; por ahora no se reserva tiempo de viaje.');
   if (weekday === 1 && s.mondayEveningEnabled && !s.mondayReturnTravelConfirmed) pending.push(`Regreso después del ensayo del lunes: viaje estimado en ${s.cordobaHomeTravelMin} min. Ajustá la duración si cambia.`);
-  if (weekday === 1 && !dropoff) pending.push('Confirmar el viaje desde casa a [DESTINO]; su duración se puede editar por separado.');
+  if (weekday === 1 && !skipPewen && !dropoff) pending.push('Confirmar el viaje desde casa a [DESTINO]; su duración se puede editar por separado.');
   if (weekday === s.recordingDay && !s.recordingConfirmed) pending.push('Confirmar el horario de grabación; el bloque actual es un ejemplo.');
   if (weekday === s.recordingDay && s.recordingTravelMin === 0) pending.push('Confirmar el lugar de grabación y sus traslados; por ahora no se reserva tiempo de viaje.');
   if (weekday === 6 && s.rehearsalTravelMin === 0) pending.push('Completá el traslado al ensayo en [LUGAR]; el ensayo es 16:30–19:00.');
 
-  const tentativePlan = !s.familyConfirmed || (weekday === 1 && (!s.cordobaConfirmed || !s.cordobaEndConfirmed))
+  const tentativePlan = !s.familyConfirmed || (weekday === 1 && !skipPewen && (!s.cordobaConfirmed || !s.cordobaEndConfirmed))
     || (weekday === s.recordingDay && !s.recordingConfirmed);
 
   const push = (id: string, title: string, start: number, end: number, kind: EventKind, detail: string, fixed = true, tentative = false, careAllowed = false) => {
@@ -327,7 +358,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   if (dropoff && !schoolClosed) {
     push('school-out', 'Salir para el jardín', schoolStart - s.schoolTravelMin, schoolStart, 'travel', `${s.schoolTravelMin} min de Uber; llegar a las ${formatTime(schoolStart)}.`, true, !s.familyConfirmed, true);
     push('school-dropoff', 'Dejar a [PEQUE] en el jardín', schoolStart, schoolStart + 5, 'school', 'Entrada confirmada. El jardín nunca se adelanta para acomodar otro compromiso.', true, !s.familyConfirmed, true);
-    if (weekday !== 1) push('school-back', 'Volver del jardín', schoolStart + 5, schoolStart + 5 + s.schoolTravelMin, 'travel', `${s.schoolTravelMin} min estimados de regreso.`, true, !s.familyConfirmed, true);
+    if (weekday !== 1 || skipPewen) push('school-back', 'Volver del jardín', schoolStart + 5, schoolStart + 5 + s.schoolTravelMin, 'travel', `${s.schoolTravelMin} min estimados de regreso.`, true, !s.familyConfirmed, true);
   }
 
   if (pickup && !schoolClosed) {
@@ -337,7 +368,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   }
 
   let hasOfficeLunch = false;
-  if (weekday === 1) {
+  if (weekday === 1 && !skipPewen) {
     const arrival = time(s.cordobaArrival, defaults.cordobaArrival);
     const fromSchool = dropoff && !schoolClosed;
     const travel = fromSchool ? s.cordobaTravelMin : s.cordobaHomeTravelMin;
@@ -355,18 +386,27 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
       push('meal-lunch-office', 'Almorzar', lunchStart, lunchStart + 30, 'meal', 'Pausa de 30 min reservada dentro de la jornada en [DESTINO].', false, tentative, true);
       push('cordoba-work-pm', 'Trabajar en [DESTINO]', lunchStart + 30, end, 'work', 'Duración de jornada de ejemplo, incluyendo la pausa de almuerzo.', true, tentative);
     } else push('cordoba-work', 'Trabajar en [DESTINO]', arrival, end, 'work', 'Duración de ejemplo hasta confirmar fin de jornada.', true, tentative);
-    if (s.mondayEveningEnabled) {
-      const rehearsalStart = time(s.mondayEveningStart, defaults.mondayEveningStart);
-      const rehearsalEnd = time(s.mondayEveningEnd, defaults.mondayEveningEnd);
-      const rehearsalName = s.mondayEveningName || 'Ensayo';
-      if (rehearsalEnd <= rehearsalStart) warnings.push(`${rehearsalName}: la hora de finalización debe ser posterior al inicio, dentro del lunes.`);
-      else {
-        push('monday-rehearsal-out', `Ir al ensayo: ${rehearsalName}`, rehearsalStart - s.mondayEveningTravelMin, rehearsalStart, 'travel', `${s.mondayEveningTravelMin} min de traslado desde el trabajo configurados.`, true);
-        push('monday-rehearsal', rehearsalName, rehearsalStart, rehearsalEnd, 'work', `Ensayo de los lunes, ${formatTime(rehearsalStart)}–${formatTime(rehearsalEnd)}. Permanecés en [DESTINO] hasta terminar.`, true);
-        push('cordoba-back', 'Volver de [DESTINO]', rehearsalEnd, rehearsalEnd + s.cordobaHomeTravelMin, 'travel', `Regreso en auto con ${s.mondayReturnCompanion || 'compañía a confirmar'}, después del ensayo. ${s.cordobaHomeTravelMin} min${s.mondayReturnTravelConfirmed ? ' confirmados' : ' estimados; confirmar duración'}.`, true, !s.mondayReturnTravelConfirmed);
-        awayWindows.push({start: departure, end: rehearsalEnd + s.cordobaHomeTravelMin});
-      }
-    } else push('cordoba-back', 'Volver de [DESTINO]', end, end + s.cordobaHomeTravelMin, 'travel', `${s.cordobaHomeTravelMin} min de regreso; salida pendiente de confirmar.`, true, tentative);
+    if (!s.mondayEveningEnabled) push('cordoba-back', 'Volver de [DESTINO]', end, end + s.cordobaHomeTravelMin, 'travel', `${s.cordobaHomeTravelMin} min de regreso; salida pendiente de confirmar.`, true, tentative);
+  }
+
+  // The Monday orchestra rehearsal survives an office exception on the same date.
+  if (weekday === 1 && s.mondayEveningEnabled) {
+    const rehearsalStart = time(s.mondayEveningStart, defaults.mondayEveningStart);
+    const rehearsalEnd = time(s.mondayEveningEnd, defaults.mondayEveningEnd);
+    const soloDeparture = time(s.mondaySoloDeparture, defaults.mondaySoloDeparture);
+    const soloArrival = time(s.mondaySoloArrival, defaults.mondaySoloArrival);
+    const attendanceStart = skipPewen ? Math.max(rehearsalStart, soloArrival) : rehearsalStart;
+    const rehearsalName = s.mondayEveningName || 'Ensayo';
+    if (skipPewen && soloArrival <= soloDeparture) warnings.push(`${rehearsalName}: la llegada del colectivo debe ser posterior a la salida, dentro del lunes.`);
+    if (rehearsalEnd <= attendanceStart) warnings.push(`${rehearsalName}: la hora de finalización debe ser posterior al inicio y a tu llegada, dentro del lunes.`);
+    else {
+      const departure = skipPewen ? soloDeparture : rehearsalStart - s.mondayEveningTravelMin;
+      push('monday-rehearsal-out', skipPewen ? `Ir en colectivo al ensayo: ${rehearsalName}` : `Ir al ensayo: ${rehearsalName}`, departure, skipPewen ? soloArrival : rehearsalStart, 'travel', skipPewen ? `Colectivo desde Carlos Paz: salida ${formatTime(soloDeparture)} y llegada acordada ${formatTime(soloArrival)}. Hoy no vas a [DESTINO].` : `${s.mondayEveningTravelMin} min de traslado desde el trabajo configurados.`, true);
+      push('monday-rehearsal', rehearsalName, attendanceStart, rehearsalEnd, 'work', skipPewen ? `El ensayo comienza a las ${formatTime(rehearsalStart)}; hoy llegás a las ${formatTime(soloArrival)} por acuerdo y te quedás hasta las ${formatTime(rehearsalEnd)}. No hay jornada en [DESTINO].` : `Ensayo de los lunes, ${formatTime(rehearsalStart)}–${formatTime(rehearsalEnd)}. Permanecés en [DESTINO] hasta terminar.`, true);
+      push('cordoba-back', skipPewen ? 'Volver del ensayo' : 'Volver de [DESTINO]', rehearsalEnd, rehearsalEnd + s.cordobaHomeTravelMin, 'travel', `Regreso en auto con ${s.mondayReturnCompanion || 'compañía a confirmar'}, después del ensayo. ${s.cordobaHomeTravelMin} min${s.mondayReturnTravelConfirmed ? ' confirmados' : ' estimados; confirmar duración'}.`, true, !s.mondayReturnTravelConfirmed);
+      const awayStart = skipPewen ? soloDeparture : events.find(e => e.id === 'cordoba-out')?.start ?? departure;
+      awayWindows.push({start: awayStart, end: rehearsalEnd + s.cordobaHomeTravelMin});
+    }
   }
 
   if (weekday === s.recordingDay) {
@@ -428,10 +468,14 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
 
   // Family ranges do not force a midnight wake-up. Fixed journeys and commitments do.
   const earliestFixed = events.filter(e => e.fixed && e.kind !== 'family' && !e.id.startsWith('care-')).reduce((earliest, event) => Math.min(earliest, event.start), MINUTE_DAY);
+  // Reserve enough morning preparation for the preferred 08:15 workout on an
+  // office-free Monday. Actual school journeys still take precedence below.
+  const preferredMondayDeparture = 8 * 60 + 15 - s.gymTravelMin;
+  const morningAnchor = skipPewen ? Math.min(earliestFixed, preferredMondayDeparture) : earliestFixed;
   const defaultWake = time(s.defaultWake, defaults.defaultWake);
   const breakfastDuration = s.breakfastInPreparation ? 0 : 20;
   const morningDuration = s.preparationMin + breakfastDuration;
-  const rawWake = Math.min(defaultWake, earliestFixed - morningDuration - s.morningBufferMin);
+  const rawWake = Math.min(defaultWake, morningAnchor - morningDuration - s.morningBufferMin);
   if (rawWake < 0) warnings.push('La preparación del primer compromiso empezaría el día anterior. Revisá el horario o la duración: el plan no entra en esta mañana.');
   const wakeTime = Math.max(0, rawWake);
   const bedtimePrevious = ((wakeTime - Math.round(s.sleepHours * 60)) % MINUTE_DAY + MINUTE_DAY) % MINUTE_DAY;
@@ -446,26 +490,35 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
     else push(id, title, slot, slot + duration, 'meal', 'Pausa protegida para comer.', false, false, true);
   };
   if (s.breakfastInPreparation && s.preparationMin > 0) {
-    push('meal-breakfast', 'Desayuno y prepararte', wakeTime, wakeTime + s.preparationMin, 'meal', `Rutina de ${s.preparationMin} min: desayuno y preparación incluidos. Ajustá si necesitás más tiempo.`, false, !s.preparationConfirmed, true);
+    push('meal-breakfast', s.breakfastCreatine ? 'Desayuno, creatina y prepararte' : 'Desayuno y prepararte', wakeTime, wakeTime + s.preparationMin, 'meal', `Rutina de ${s.preparationMin} min: desayuno y preparación incluidos. Ajustá si necesitás más tiempo.${s.breakfastCreatine ? ' Tomar la creatina junto al desayuno, según tu indicación habitual.' : ''}`, false, !s.preparationConfirmed, true);
   } else {
-    push('meal-breakfast', 'Desayunar', wakeTime, wakeTime + 20, 'meal', '20 min de desayuno, separados del tiempo para prepararte.', false, false, true);
+    push('meal-breakfast', s.breakfastCreatine ? 'Desayunar y tomar creatina' : 'Desayunar', wakeTime, wakeTime + 20, 'meal', `20 min de desayuno, separados del tiempo para prepararte.${s.breakfastCreatine ? ' Tomar la creatina junto al desayuno, según tu indicación habitual.' : ''}`, false, false, true);
     push('morning-preparation', 'Prepararte para el día', wakeTime + 20, wakeTime + 20 + s.preparationMin, 'personal', `${s.preparationMin} min de preparación además del desayuno.`, false, !s.preparationConfirmed, true);
   }
-  if (earliestFixed < MINUTE_DAY && s.morningBufferMin > 0) {
-    push('morning-buffer', 'Margen antes de salir', earliestFixed - s.morningBufferMin, earliestFixed, 'personal', `${s.morningBufferMin} min reservados antes del primer compromiso.`, false, false, true);
+  if (morningAnchor < MINUTE_DAY && s.morningBufferMin > 0) {
+    push('morning-buffer', 'Margen antes de salir', morningAnchor - s.morningBufferMin, morningAnchor, 'personal', `${s.morningBufferMin} min reservados antes del primer compromiso.`, false, false, true);
   }
   if (!hasOfficeLunch) meal('meal-lunch', 'Almorzar', 30, 705, 900, 780);
-  meal('meal-snack', 'Merienda', 15, 960, 1125, 990);
+  const mondayRehearsalDeparture = skipPewen ? events.find(e => e.id === 'monday-rehearsal-out')?.start : undefined;
+  // On an office-free Monday, eat before leaving home for the afternoon rehearsal.
+  const snackBeforeDeparture = mondayRehearsalDeparture === undefined ? 990 : Math.max(0, mondayRehearsalDeparture - 15);
+  meal('meal-snack', 'Merienda', 15, Math.min(960, snackBeforeDeparture), 1125, Math.min(990, snackBeforeDeparture));
   meal('meal-dinner', 'Cenar', 30, 1170, 1380, 1230);
 
-  if (s.gymDays.includes(weekday)) {
+  if (s.gymDays.includes(weekday) || skipPewen) {
     const duration = s.gymTravelMin * 2 + s.gymDurationMin + s.showerMin;
-    const slot = findSlot(duration, Math.max(wakeTime + 30, 420), 1290, 1020, busy(true, true));
+    const preferred = skipPewen ? preferredMondayDeparture : 1020;
+    const slot = findSlot(duration, Math.max(wakeTime + 30, 420), 1290, preferred, busy(true, true));
     if (slot === undefined) warnings.push(`Entrenamiento: no hay un hueco real de ${duration} min fuera del cuidado de [PEQUE]. Elegí cobertura u otro día; no se superpuso con tus compromisos.`);
     else {
+      if (skipPewen && slot !== preferred) {
+        const wanted = {start:preferred,end:preferred+duration};
+        const schoolBlocks = events.some(e => (e.id.startsWith('school-') || e.id.startsWith('pickup-')) && overlaps(e,wanted));
+        warnings.push(`Entrenamiento: las 08:15 no son posibles con ${schoolBlocks ? 'los viajes del jardín' : 'los compromisos y cuidados de hoy'}. Se ubicó a las ${formatTime(slot+s.gymTravelMin)}, con el traslado, la vuelta y la ducha completos.`);
+      }
       let cursor = slot;
       push('gym-out', 'Ir a entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de ida.`, false);
-      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', 'Bloque de entrenamiento. La rutina y la intensidad se definen aparte.', false);
+      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. La rutina y la intensidad se definen aparte.' : 'Bloque de entrenamiento. La rutina y la intensidad se definen aparte.', false);
       push('gym-back', 'Volver de entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de regreso.`, false);
       push('gym-shower', 'Ducha y cambio', cursor, cursor + s.showerMin, 'personal', `${s.showerMin} min después de entrenar.`, false);
     }
@@ -482,7 +535,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
     }
   }
 
-  if (weekday >= 2 && weekday <= 5 && weekday !== s.recordingDay && s.flexibleWorkMin > 0) {
+  if ((weekday >= 2 && weekday <= 5 || skipPewen) && weekday !== s.recordingDay && s.flexibleWorkMin > 0) {
     let remaining = s.flexibleWorkMin;
     let block = 0;
     const openings = freeRanges(Math.max(480, wakeTime + morningDuration), 1140, busy(true, true));

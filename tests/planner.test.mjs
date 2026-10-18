@@ -12,7 +12,7 @@ const { outputText, diagnostics = [] } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022, strict: true },
 });
 assert.equal(diagnostics.filter(d => d.category === ts.DiagnosticCategory.Error).length, 0);
-const { defaults, buildDay, isoDate, addDays, formatTime, weekForDate } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+const { defaults, buildDay, isoDate, addDays, formatTime, weekForDate, normalizeMapsUrl } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 // Explicitly activated fixture: public defaults intentionally start with an empty agenda.
 const settings = (patch = {}) => ({
   ...defaults,
@@ -133,6 +133,110 @@ test('configuración anterior conserva el regreso laboral y no activa ensayo nue
   assert.equal(monday.events.some(e => e.id === 'monday-rehearsal'), false);
   assert.equal(monday.events.find(e => e.id === 'cordoba-back').start, 930);
   for (const value of ['true','false',1]) assert.equal(buildDay('2026-10-19', {...legacy,mondayEveningEnabled:value}, {}, []).events.some(e => e.id === 'monday-rehearsal'), false);
+});
+
+test('un lunes A sin Pewen reserva entrenamiento 08:15, conserva ensayo y no recupera la jornada otros días', () => {
+  const config = settings({mondayEveningEnabled:true,mondayEveningName:'La orquesta',mondayReturnCompanion:'Acompañante',gymDays:[2,3,4,5,6],mealPrepTuesdayStart:'10:30',mealPrepFridayStart:'10:30'});
+  const overrides = {'2026-10-26':{skipPewen:true}};
+  const day = buildDay('2026-10-26',config,overrides,[]);
+  assert.equal(day.events.some(e => e.id === 'cordoba-out' || e.id.startsWith('cordoba-work') || e.id === 'cordoba-buffer'),false);
+  assert.equal(day.events.find(e => e.id === 'gym').start,495);
+  assert.equal(day.events.find(e => e.id === 'gym').end,570);
+  assert.equal(day.events.find(e => e.id === 'gym').fixed,false);
+  assert.equal(day.wakeTime,450,'despertar07:30 para desayuno20+10margen y salir08:00');
+  assert.equal(day.events.find(e => e.id === 'monday-rehearsal-out').start,960);
+  assert.equal(day.events.find(e => e.id === 'monday-rehearsal-out').end,1020);
+  assert.equal(day.events.find(e => e.id === 'monday-rehearsal-out').tentative,false);
+  assert.match(day.events.find(e => e.id === 'monday-rehearsal-out').detail,/Colectivo desde Carlos Paz/);
+  assert.equal(day.events.find(e => e.id === 'monday-rehearsal').start,1020);
+  assert.equal(day.events.find(e => e.id === 'monday-rehearsal').end,1200);
+  assert.match(day.events.find(e => e.id === 'monday-rehearsal').detail,/comienza a las 16:30; hoy llegás a las 17:00 por acuerdo/);
+  assert.equal(day.events.find(e => e.id === 'meal-snack').start,945);
+  assert.equal(day.events.find(e => e.id === 'meal-snack').end,960);
+  assert.equal(day.events.find(e => e.id === 'cordoba-back').start,1200);
+  assert.equal(day.events.find(e => e.id === 'cordoba-back').end,1260);
+  assert.match(day.events.find(e => e.id === 'cordoba-back').detail,/Acompañante/);
+  assert.equal(day.events.filter(e => e.kind === 'meal').length,4);
+  for (const e of day.events) assert.equal(e.conflict,undefined,`${e.title}: no debe haber cruces`);
+  assert.equal(day.pending.some(p => p.includes('terminás de trabajar')),false);
+  assert.equal(day.pending.some(p => p.includes('desde casa al ensayo')),false,'el viaje en colectivo 16–17 ya está acordado');
+  for (const date of ['2026-10-28','2026-10-30']) assert.deepEqual(buildDay(date,config,overrides,[]),buildDay(date,config,{},[]),'miércoles y viernes conservan sus compromisos sin recibir Pewen');
+  assert.ok(buildDay('2026-11-02',config,overrides,[]).events.some(e => e.id === 'cordoba-out'),'el lunes siguiente conserva Pewen');
+});
+
+test('un lunes B sin Pewen conserva jardín y regreso y acomoda entrenamiento08:35 con aviso', () => {
+  const day = buildDay('2026-10-19',settings({mondayEveningEnabled:true,gymDays:[2,3,4,5,6]}),{'2026-10-19':{skipPewen:true}},[]);
+  assert.equal(day.wakeTime,405);
+  assert.equal(day.events.find(e => e.id === 'school-out').start,435);
+  assert.equal(day.events.find(e => e.id === 'school-dropoff').start,465);
+  assert.equal(day.events.find(e => e.id === 'school-back').start,470);
+  assert.equal(day.events.find(e => e.id === 'school-back').end,500);
+  assert.equal(day.events.find(e => e.id === 'gym').start,515,'se esperan los viajes del jardín antes de salir a entrenar');
+  assert.equal(day.events.find(e => e.id === 'gym').end,590);
+  for (const gym of day.events.filter(e => e.id.startsWith('gym'))) {
+    assert.equal(gym.conflict,undefined);
+    for (const fixed of day.events.filter(e => e.fixed)) assert.equal(intersects(gym,fixed),false);
+  }
+  assert.ok(day.warnings.some(w => w.includes('08:15 no son posibles') && w.includes('jardín') && w.includes('08:35')));
+  assert.equal(day.events.filter(e => e.kind === 'meal').length,4);
+  assert.equal(day.events.some(e => e.id === 'cordoba-out'),false);
+});
+
+test('un lunes sin Pewen y sin espacio para entrenar avisa en lugar de superponer cuidados', () => {
+  const day=buildDay('2026-10-26',settings({mondayEveningEnabled:true,gymDays:[2,3,4,5,6]}),{'2026-10-26':{skipPewen:true,care:'me'}},[]);
+  assert.equal(day.events.some(e=>e.id.startsWith('gym')),false);
+  assert.ok(day.warnings.some(w=>w.startsWith('Entrenamiento: no hay un hueco real de 120 min')));
+  assert.ok(day.events.some(e=>e.id==='monday-rehearsal'),'el ensayo se conserva y señala su propio conflicto de cuidado');
+});
+
+test('la salida al ensayo sin trabajo es editable y no cambia el lunes normal', () => {
+  const config=settings({mondayEveningEnabled:true,mondaySoloDeparture:'15:45',mondaySoloArrival:'16:45'});
+  const day=buildDay('2026-10-26',config,{'2026-10-26':{skipPewen:true}},[]);
+  assert.equal(day.events.find(e=>e.id==='monday-rehearsal-out').start,945);
+  assert.equal(day.events.find(e=>e.id==='monday-rehearsal-out').end,1005);
+  assert.equal(day.events.find(e=>e.id==='monday-rehearsal').start,1005);
+  assert.equal(buildDay('2026-10-26',config,{},[]).events.find(e=>e.id==='monday-rehearsal').start,990);
+  const invalid=buildDay('2026-10-26',{...config,mondaySoloDeparture:'99:99',mondaySoloArrival:null},{'2026-10-26':{skipPewen:true}},[]);
+  assert.equal(invalid.events.find(e=>e.id==='monday-rehearsal-out').start,960);
+  assert.equal(invalid.events.find(e=>e.id==='monday-rehearsal').start,1020);
+  const reversed=buildDay('2026-10-26',{...config,mondaySoloDeparture:'17:00',mondaySoloArrival:'16:00'},{'2026-10-26':{skipPewen:true}},[]);
+  assert.ok(reversed.warnings.some(w=>w.includes('llegada del colectivo debe ser posterior')));
+});
+
+test('saltar Pewen solo se aplica el lunes y con un booleano verdadero', () => {
+  const config = settings({gymDays:[2,3,4,5,6]});
+  for (const skipPewen of ['true','false',1,false,null,undefined]) {
+    assert.deepEqual(buildDay('2026-10-19',config,{'2026-10-19':{skipPewen}},[]),buildDay('2026-10-19',config,{},[]));
+  }
+  assert.deepEqual(buildDay('2026-10-21',config,{'2026-10-21':{skipPewen:true}},[]),buildDay('2026-10-21',config,{},[]));
+  const withoutRehearsal = buildDay('2026-10-26',config,{'2026-10-26':{skipPewen:true}},[]);
+  assert.equal(withoutRehearsal.events.some(e => e.id === 'cordoba-back' || e.id === 'monday-rehearsal'),false);
+  assert.equal(withoutRehearsal.events.find(e => e.id === 'gym').start,495);
+});
+
+test('creatina acompaña el mismo desayuno cada mañana, sin añadir tiempos ni una dosis', () => {
+  for (const breakfastInPreparation of [true,false]) {
+    for (let n=0;n<14;n++) {
+      const date=addDays('2026-10-19',n);
+      const baseline=buildDay(date,settings({breakfastInPreparation}),{},[]);
+      const day=buildDay(date,settings({breakfastInPreparation,breakfastCreatine:true,hasBlender:true,hasHandBlender:true}),{},[]);
+      assert.equal(day.wakeTime,baseline.wakeTime);
+      assert.deepEqual(day.events.map(e=>[e.id,e.start,e.end]),baseline.events.map(e=>[e.id,e.start,e.end]));
+      const breakfasts=day.events.filter(e=>e.id==='meal-breakfast');
+      assert.equal(breakfasts.length,1);
+      assert.match(breakfasts[0].title,/creatina/);
+      assert.match(breakfasts[0].detail,/junto al desayuno/);
+      assert.doesNotMatch(breakfasts[0].detail,/\d+\s*(g|mg|gramos)\b/);
+    }
+  }
+  for (const breakfastCreatine of ['true','false',1]) assert.doesNotMatch(buildDay('2026-10-19',settings({breakfastCreatine}),{},[]).events.find(e=>e.id==='meal-breakfast').title,/creatina/);
+});
+
+test('mapas y electrodomésticos empiezan vacíos y los enlaces rechazan protocolos activos y credenciales', () => {
+  for (const key of ['breakfastCreatine','hasBlender','hasHandBlender']) assert.equal(defaults[key],false);
+  for (const key of ['homeMapsUrl','gymMapsUrl','workMapsUrl','mondayRehearsalMapsUrl']) assert.equal(defaults[key],'');
+  assert.equal(normalizeMapsUrl(' https://share.google/example '),'https://share.google/example');
+  for (const url of ['javascript:alert(1)','data:text/html,hello','http://example.com','https://user:password@example.com','https://example.com/'+ 'a'.repeat(2000),'bad',null,42]) assert.equal(normalizeMapsUrl(url),'');
 });
 
 test('desayuno adicional despierta 06:25 y deja preparación y margen separados', () => {

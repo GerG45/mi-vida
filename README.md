@@ -1,4 +1,4 @@
-# Mi Vida
+# Mi Vida.
 
 Un espacio personal para organizar el día, capturar pendientes, escribir y hacer lugar para lo importante. Web adaptable a PC y celular, preparada para GitHub Pages y Firebase.
 
@@ -8,13 +8,15 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 
 ## Qué incluye
 
-- Agenda que calcula el despertar a partir del primer compromiso, la preparación y los viajes. Alternancia familiar de dos semanas, excepciones por fecha y detección de cruces.
+- Agenda que calcula el despertar a partir del primer compromiso, la preparación y los viajes, y cuándo acostarse para despertar al día siguiente. Alternancia familiar de dos semanas, excepciones por fecha y detección de cruces.
 - Bandeja GTD, próximas acciones, proyectos, esperas, algún día, referencia y revisión semanal. Sólo se agenda una acción cuando elegís fecha y hora.
-- Diario de mañana, cierre y escritura libre, con historial y búsqueda.
+- Diario de mañana, cierre y escritura libre, con historial, búsqueda y reporte semanal descargable para revisar tus registros.
 - Hábitos con señal y versión mínima, sin penalizar una pausa.
 - Ideas y reflexiones inspiradas en cuatro libros de James Clear y Robin Sharma, identificadas como redacción original; fuentes y páginas en la web.
 - Cocina por tandas, compras y rutina de entrenamiento de referencia.
 - Horarios fijos opcionales para las tandas del martes y viernes, y ensayo del lunes con regreso posterior configurable.
+- Excepción por fecha para un lunes sin trabajo: entrenamiento por la mañana, ida en colectivo al ensayo y regreso habitual; miércoles y viernes se mantienen.
+- Creatina junto al desayuno como recordatorio personal, opciones con licuadora/minipimer y enlaces privados a tus lugares.
 - Copia local, respaldo JSON y calendario ICS. Sincronización privada por cuenta con Firebase.
 
 La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS breves. La preferencia del sistema de reducir movimiento desactiva las animaciones y transiciones. Los cambios visuales conservan las herramientas y los datos existentes.
