@@ -2,6 +2,8 @@
 
 Un espacio personal para organizar el día, capturar pendientes, escribir y hacer lugar para lo importante. Web adaptable a PC y celular, preparada para GitHub Pages y Firebase.
 
+También incluye una APK Android con despertador y recordatorios locales. Ver [instalación, prueba y compilación de Android](docs/ANDROID.md).
+
 [Código en GitHub](https://github.com/GerG45/mi-vida) · [Dirección de la web](https://gerg45.github.io/mi-vida/)
 
 ## Qué incluye

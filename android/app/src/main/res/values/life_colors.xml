@@ -1,0 +1,6 @@
+<resources>
+    <color name="life_launcher_background">#20251F</color>
+    <color name="colorPrimary">#364D3D</color>
+    <color name="colorPrimaryDark">#20251F</color>
+    <color name="colorAccent">#E5B78A</color>
+</resources>

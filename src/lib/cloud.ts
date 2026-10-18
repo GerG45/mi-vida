@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from 'react';
 import { initializeApp, deleteApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, GoogleAuthProvider, signOut, type Auth, type User } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, type Auth, type User } from 'firebase/auth';
+import {isAndroidApp, LifeGoogleAuth} from './native';
 import { getFirestore, collection, doc, onSnapshot, writeBatch, serverTimestamp, terminate, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { acknowledgeRecords, bindCloudWriter, decodeRecordId, getPendingRecords, getStorageError, getStoreScope, isLifeRecord, localDeviceRecords, queueLocalDeviceRecords, receiveCloudSnapshot, recordId, setStoreScope, type LifeRecord } from './lifeStore';
 
 export interface MiVidaFirebaseConfig extends FirebaseOptions { allowRegistration?: boolean; emailPassword?: boolean; googleSignIn?: boolean; allowedEmail?: string }
 export type CloudMode = 'local'|'loading'|'offline'|'pending'|'synced'|'error';
-export interface CloudStatus { mode: CloudMode; configured: boolean; user: {uid:string;email:string|null}|null; initialSnapshot: boolean; accountEmpty: boolean; pendingCount: number; googlePopupPending: boolean; error: string|null; lastSyncedAt: string|null }
-let status: CloudStatus = {mode:'local',configured:false,user:null,initialSnapshot:false,accountEmpty:false,pendingCount:0,googlePopupPending:false,error:null,lastSyncedAt:null};
+export interface CloudStatus { mode: CloudMode; configured: boolean; authReady: boolean; user: {uid:string;email:string|null}|null; initialSnapshot: boolean; accountEmpty: boolean; pendingCount: number; googlePopupPending: boolean; error: string|null; lastSyncedAt: string|null }
+let status: CloudStatus = {mode:'local',configured:false,authReady:false,user:null,initialSnapshot:false,accountEmpty:false,pendingCount:0,googlePopupPending:false,error:null,lastSyncedAt:null};
 let config: MiVidaFirebaseConfig | null = null;
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -47,7 +48,7 @@ export function cloudError(error: unknown): string {
     'auth/unauthorized-domain':'Agregá este dominio a los dominios autorizados de Firebase Authentication.',
     'auth/popup-blocked':'El navegador bloqueó la ventana de Google. Permití las ventanas emergentes o abrí Mi Vida en Chrome o Edge.',
     'auth/popup-closed-by-user':'Cerraste la ventana de Google antes de ingresar.', 'auth/network-request-failed':'No se pudo conectar. Revisá tu conexión.',
-    'app/google-timeout':'Google no terminó de abrir el acceso en 60 segundos. Abrí Mi Vida en Chrome o Edge y permití las ventanas emergentes. Todavía no se confirmó el ingreso.',
+    'app/google-timeout':isAndroidApp() ? 'Google todavía no confirmó el ingreso. Completá o cancelá el selector de cuenta de Android.' : 'Google no terminó de abrir el acceso en 60 segundos. Abrí Mi Vida en Chrome o Edge y permití las ventanas emergentes. Todavía no se confirmó el ingreso.',
     'app/operation-timeout':'La operación no terminó en 60 segundos. No se confirmó su resultado. Podés seguir usando Mi Vida y revisar el estado de tu cuenta.',
     'app/wait-cancelled':'Dejaste de esperar. Si se abrió una ventana de Google, cerrala antes de volver a intentar. Esto no cancela una operación que el navegador ya esté completando.',
     'app/google-in-progress':'Hay un acceso de Google pendiente en este navegador. Completá esa ventana o abrí Mi Vida en Chrome o Edge.',
@@ -96,6 +97,7 @@ async function flush(): Promise<void> {
 }
 
 function watchUser(user: User | null): void {
+  publish({authReady:true});
   session++; stopSnapshot?.(); stopSnapshot = undefined; sending = false; snapshotPending = false; snapshotFromCache = true; serverWaitExpired = false; connectionFailed = false; records = [];
   if (!user || !db || !config) { setStoreScope(null); publish({user:null,initialSnapshot:false,accountEmpty:false,error:null,lastSyncedAt:null}); refresh(); return; }
   if (config.allowedEmail && user.email?.toLowerCase() !== config.allowedEmail) {
@@ -131,7 +133,7 @@ async function initialize(next: MiVidaFirebaseConfig | null): Promise<void> {
   if (db) await terminate(db).catch(() => {});
   if (app) await deleteApp(app).catch(() => {});
   auth = null;db = null;app = null;config = next;
-  publish({configured:!!next,user:null,mode:'local',initialSnapshot:false,accountEmpty:false,pendingCount:0,error:null,lastSyncedAt:null});
+  publish({configured:!!next,authReady:!next,user:null,mode:'local',initialSnapshot:false,accountEmpty:false,pendingCount:0,error:null,lastSyncedAt:null});
   if (!next) return;
   try {
     const {allowRegistration: _registration, emailPassword: _password, googleSignIn: _google, allowedEmail: _email,...options} = next;
@@ -186,10 +188,18 @@ export async function loginWithGoogle(): Promise<void> {
   assertNoPopup();
   const currentAuth = requireAuth();
   publish({googlePopupPending:true});
-  try { await signInWithPopup(currentAuth,new GoogleAuthProvider()); }
+  try {
+    if (isAndroidApp()) {
+      const {idToken} = await LifeGoogleAuth.signIn();
+      await signInWithCredential(currentAuth,GoogleAuthProvider.credential(idToken));
+    } else await signInWithPopup(currentAuth,new GoogleAuthProvider());
+  }
   finally { publish({googlePopupPending:false}); }
 }
-export async function logoutCloud(): Promise<void> { await signOut(requireAuth()); }
+export async function logoutCloud(): Promise<void> {
+  await signOut(requireAuth());
+  if (isAndroidApp()) await LifeGoogleAuth.signOut();
+}
 export async function retryCloud(): Promise<void> { connectionFailed = false;if (auth?.currentUser) watchUser(auth.currentUser);else await flush(); }
 export async function uploadLocalDeviceData(): Promise<void> {
   if (!status.user || !status.initialSnapshot || !status.accountEmpty || snapshotFromCache) throw new Error('La cuenta debe estar conectada y vacía para subir los datos de este dispositivo.');

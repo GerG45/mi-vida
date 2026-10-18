@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Public OAuth audience from this Firebase project's Google provider. -->
+    <string name="default_web_client_id" translatable="false">1028390090169-ifqhek8hbhphs9vi41jftctihfqlpqol.apps.googleusercontent.com</string>
+</resources>
