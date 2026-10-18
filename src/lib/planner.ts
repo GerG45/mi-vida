@@ -25,6 +25,13 @@ export type Settings = {
   cordobaTravelMin: number;
   cordobaHomeTravelMin: number;
   cordobaBufferMin: number;
+  mondayEveningEnabled: boolean;
+  mondayEveningName: string;
+  mondayEveningStart: string;
+  mondayEveningEnd: string;
+  mondayEveningTravelMin: number;
+  mondayReturnCompanion: string;
+  mondayReturnTravelConfirmed: boolean;
   recordingStart: string;
   recordingDurationMin: number;
   recordingTravelMin: number;
@@ -37,6 +44,8 @@ export type Settings = {
   cookingWithChild: boolean;
   mealPrepDurationMin: number;
   mealPrepDays: number[];
+  mealPrepTuesdayStart: string;
+  mealPrepFridayStart: string;
   flexibleWorkMin: number;
   rehearsalTravelMin: number;
 };
@@ -113,6 +122,13 @@ export const defaults: Settings = {
   cordobaTravelMin: 60,
   cordobaHomeTravelMin: 60,
   cordobaBufferMin: 15,
+  mondayEveningEnabled: false,
+  mondayEveningName: 'Ensayo',
+  mondayEveningStart: '16:30',
+  mondayEveningEnd: '20:00',
+  mondayEveningTravelMin: 0,
+  mondayReturnCompanion: 'Compañía a confirmar',
+  mondayReturnTravelConfirmed: false,
   recordingStart: '15:00',
   recordingDurationMin: 180,
   recordingTravelMin: 0,
@@ -125,6 +141,8 @@ export const defaults: Settings = {
   cookingWithChild: false,
   mealPrepDurationMin: 90,
   mealPrepDays: [2, 5],
+  mealPrepTuesdayStart: '',
+  mealPrepFridayStart: '',
   flexibleWorkMin: 120,
   rehearsalTravelMin: 0,
 };
@@ -193,11 +211,11 @@ function weekdayList(value: unknown, fallback: number[]): number[] {
 function normalize(input: Settings): Settings {
   const raw = input && typeof input === 'object' ? input : {} as Settings;
   const s = { ...defaults, ...raw };
-  for (const key of ['scheduleEnabled','familyConfirmed','cordobaConfirmed','cordobaEndConfirmed','recordingConfirmed','preparationConfirmed'] as const) s[key] = s[key] === true;
-  for (const key of ['childName','workLocation','rehearsalName','rehearsalPlace'] as const) s[key] = typeof s[key] === 'string' ? s[key].slice(0,100) : defaults[key];
+  for (const key of ['scheduleEnabled','familyConfirmed','cordobaConfirmed','cordobaEndConfirmed','recordingConfirmed','preparationConfirmed','mondayEveningEnabled','mondayReturnTravelConfirmed'] as const) s[key] = s[key] === true;
+  for (const key of ['childName','workLocation','rehearsalName','rehearsalPlace','mondayEveningName','mondayReturnCompanion'] as const) s[key] = typeof s[key] === 'string' ? s[key].slice(0,100) : defaults[key];
   const numeric = [
     'preparationMin', 'morningBufferMin', 'schoolTravelMin', 'cordobaWorkMin', 'cordobaTravelMin',
-    'cordobaHomeTravelMin', 'cordobaBufferMin', 'recordingDurationMin', 'recordingTravelMin',
+    'cordobaHomeTravelMin', 'cordobaBufferMin', 'mondayEveningTravelMin', 'recordingDurationMin', 'recordingTravelMin',
     'gymDurationMin', 'gymTravelMin', 'showerMin', 'mealPrepDurationMin', 'flexibleWorkMin', 'rehearsalTravelMin', 'danceTravelMin',
   ] as const;
   for (const key of numeric) s[key] = number(s[key], defaults[key]);
@@ -205,7 +223,8 @@ function normalize(input: Settings): Settings {
   s.recordingDay = number(s.recordingDay, defaults.recordingDay, 0, 6);
   s.sleepHours = typeof s.sleepHours === 'number' && Number.isFinite(s.sleepHours) ? Math.min(12, Math.max(4, s.sleepHours)) : defaults.sleepHours;
   s.anchorMonday = validDate(s.anchorMonday) ? s.anchorMonday : defaults.anchorMonday;
-  for (const key of ['schoolStart', 'cordobaArrival', 'recordingStart', 'defaultWake', 'preferredBedtime'] as const) s[key] = formatTime(time(s[key], defaults[key]));
+  for (const key of ['schoolStart', 'cordobaArrival', 'recordingStart', 'defaultWake', 'preferredBedtime', 'mondayEveningStart', 'mondayEveningEnd'] as const) s[key] = formatTime(time(s[key], defaults[key]));
+  for (const key of ['mealPrepTuesdayStart','mealPrepFridayStart'] as const) s[key] = typeof s[key] === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s[key]) ? s[key] : '';
   s.gymDays = weekdayList(s.gymDays, defaults.gymDays);
   s.mealPrepDays = weekdayList(s.mealPrepDays, defaults.mealPrepDays);
   if (!['pending', 'me', 'other'].includes(s.danceTransport)) s.danceTransport = 'pending';
@@ -251,6 +270,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   const warnings: string[] = [];
   const pending: string[] = [];
   const careWindows: Range[] = [];
+  const awayWindows: Range[] = [];
   const allowedDuringCare = new Set<string>();
   const schoolStart = time(s.schoolStart, defaults.schoolStart);
   const isSchoolDay = weekday >= 1 && weekday <= 5;
@@ -265,7 +285,11 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   if (!s.familyConfirmed) pending.push('Confirmar la alternancia familiar. Los cuidados se muestran como simulación.');
   if (!s.preparationConfirmed) pending.push('Confirmar cuánto tardás en prepararte: el despertar usa una duración de ejemplo.');
   if (weekday === 1 && !s.cordobaConfirmed) pending.push('Confirmar llegada y viaje a [DESTINO]: se muestran horarios de ejemplo.');
-  if (weekday === 1 && !s.cordobaEndConfirmed) pending.push('Confirmar a qué hora terminás en [DESTINO]: trabajo, regreso y huecos posteriores son tentativos.');
+  if (weekday === 1 && !s.cordobaEndConfirmed) pending.push(s.mondayEveningEnabled
+    ? 'Confirmar a qué hora terminás de trabajar en [DESTINO]: la jornada sigue siendo tentativa; el ensayo de la tarde conserva su horario.'
+    : 'Confirmar a qué hora terminás en [DESTINO]: trabajo, regreso y huecos posteriores son tentativos.');
+  if (weekday === 1 && s.mondayEveningEnabled && s.mondayEveningTravelMin === 0) pending.push('Confirmar el traslado entre el trabajo y el ensayo del lunes; por ahora no se reserva tiempo de viaje.');
+  if (weekday === 1 && s.mondayEveningEnabled && !s.mondayReturnTravelConfirmed) pending.push(`Regreso después del ensayo del lunes: viaje estimado en ${s.cordobaHomeTravelMin} min. Ajustá la duración si cambia.`);
   if (weekday === 1 && !dropoff) pending.push('Confirmar el viaje desde casa a [DESTINO]; su duración se puede editar por separado.');
   if (weekday === s.recordingDay && !s.recordingConfirmed) pending.push('Confirmar el horario de grabación; el bloque actual es un ejemplo.');
   if (weekday === s.recordingDay && s.recordingTravelMin === 0) pending.push('Confirmar el lugar de grabación y sus traslados; por ahora no se reserva tiempo de viaje.');
@@ -331,7 +355,18 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
       push('meal-lunch-office', 'Almorzar', lunchStart, lunchStart + 30, 'meal', 'Pausa de 30 min reservada dentro de la jornada en [DESTINO].', false, tentative, true);
       push('cordoba-work-pm', 'Trabajar en [DESTINO]', lunchStart + 30, end, 'work', 'Duración de jornada de ejemplo, incluyendo la pausa de almuerzo.', true, tentative);
     } else push('cordoba-work', 'Trabajar en [DESTINO]', arrival, end, 'work', 'Duración de ejemplo hasta confirmar fin de jornada.', true, tentative);
-    push('cordoba-back', 'Volver de [DESTINO]', end, end + s.cordobaHomeTravelMin, 'travel', `${s.cordobaHomeTravelMin} min de regreso; salida pendiente de confirmar.`, true, tentative);
+    if (s.mondayEveningEnabled) {
+      const rehearsalStart = time(s.mondayEveningStart, defaults.mondayEveningStart);
+      const rehearsalEnd = time(s.mondayEveningEnd, defaults.mondayEveningEnd);
+      const rehearsalName = s.mondayEveningName || 'Ensayo';
+      if (rehearsalEnd <= rehearsalStart) warnings.push(`${rehearsalName}: la hora de finalización debe ser posterior al inicio, dentro del lunes.`);
+      else {
+        push('monday-rehearsal-out', `Ir al ensayo: ${rehearsalName}`, rehearsalStart - s.mondayEveningTravelMin, rehearsalStart, 'travel', `${s.mondayEveningTravelMin} min de traslado desde el trabajo configurados.`, true);
+        push('monday-rehearsal', rehearsalName, rehearsalStart, rehearsalEnd, 'work', `Ensayo de los lunes, ${formatTime(rehearsalStart)}–${formatTime(rehearsalEnd)}. Permanecés en [DESTINO] hasta terminar.`, true);
+        push('cordoba-back', 'Volver de [DESTINO]', rehearsalEnd, rehearsalEnd + s.cordobaHomeTravelMin, 'travel', `Regreso en auto con ${s.mondayReturnCompanion || 'compañía a confirmar'}, después del ensayo. ${s.cordobaHomeTravelMin} min${s.mondayReturnTravelConfirmed ? ' confirmados' : ' estimados; confirmar duración'}.`, true, !s.mondayReturnTravelConfirmed);
+        awayWindows.push({start: departure, end: rehearsalEnd + s.cordobaHomeTravelMin});
+      }
+    } else push('cordoba-back', 'Volver de [DESTINO]', end, end + s.cordobaHomeTravelMin, 'travel', `${s.cordobaHomeTravelMin} min de regreso; salida pendiente de confirmar.`, true, tentative);
   }
 
   if (weekday === s.recordingDay) {
@@ -382,6 +417,15 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
     push(`${id}-back`, `Volver: ${title}`, start + duration, start + duration + travel, 'travel', `${travel} min de regreso.`, true);
   }
 
+  const fixedCookingTime = weekday === 2 ? s.mealPrepTuesdayStart : weekday === 5 ? s.mealPrepFridayStart : '';
+  const hasFixedCooking = s.mealPrepDays.includes(weekday) && s.mealPrepDurationMin > 0 && fixedCookingTime !== '';
+  if (hasFixedCooking) {
+    const start = time(fixedCookingTime, '10:30');
+    const end = start + s.mealPrepDurationMin;
+    const withChild = careWindows.some(care => overlaps(care, {start,end}));
+    push('meal-prep', 'Cocinar para los próximos días', start, end, 'cooking', `Tanda ${weekday === 2 ? '1' : '2'} de cocina: horario fijo elegido por vos, ${formatTime(start)}–${formatTime(end)}. ${s.mealPrepDurationMin} min de preparación.${withChild && s.cookingWithChild ? ' Cocinar con [PEQUE] habilitado por vos.' : ''}`, true, false, s.cookingWithChild);
+  }
+
   // Family ranges do not force a midnight wake-up. Fixed journeys and commitments do.
   const earliestFixed = events.filter(e => e.fixed && e.kind !== 'family' && !e.id.startsWith('care-')).reduce((earliest, event) => Math.min(earliest, event.start), MINUTE_DAY);
   const defaultWake = time(s.defaultWake, defaults.defaultWake);
@@ -395,7 +439,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   const sleepAvailable = wakeTime - preferredBedtime + (preferredBedtime >= 720 ? MINUTE_DAY : 0);
   if (sleepAvailable < s.sleepHours * 60) warnings.push(`Para dormir ${s.sleepHours} h y levantarte a las ${formatTime(wakeTime)}, acostate la noche anterior a las ${formatTime(bedtimePrevious)}. Tu hora habitual ${formatTime(preferredBedtime)} deja ${Math.max(0, Math.floor(sleepAvailable / 60))} h ${Math.max(0, Math.round(sleepAvailable % 60))} min.`);
 
-  const busy = (includeCare: boolean) => events.filter(e => includeCare || !e.id.startsWith('care-'));
+  const busy = (includeCare: boolean, includeAway = false): Range[] => [...events.filter(e => includeCare || !e.id.startsWith('care-')), ...(includeAway ? awayWindows : [])];
   const meal = (id: string, title: string, duration: number, from: number, to: number, preferred: number) => {
     const slot = findSlot(duration, Math.max(wakeTime, from), to, preferred, busy(false));
     if (slot === undefined) warnings.push(`${title}: no hay un hueco de ${duration} min en su franja. Hace falta mover un compromiso.`);
@@ -416,7 +460,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
 
   if (s.gymDays.includes(weekday)) {
     const duration = s.gymTravelMin * 2 + s.gymDurationMin + s.showerMin;
-    const slot = findSlot(duration, Math.max(wakeTime + 30, 420), 1290, 1020, busy(true));
+    const slot = findSlot(duration, Math.max(wakeTime + 30, 420), 1290, 1020, busy(true, true));
     if (slot === undefined) warnings.push(`Entrenamiento: no hay un hueco real de ${duration} min fuera del cuidado de [PEQUE]. Elegí cobertura u otro día; no se superpuso con tus compromisos.`);
     else {
       let cursor = slot;
@@ -427,8 +471,8 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
     }
   }
 
-  if (s.mealPrepDays.includes(weekday) && s.mealPrepDurationMin > 0) {
-    const slot = findSlot(s.mealPrepDurationMin, Math.max(wakeTime + morningDuration, 480), 1260, weekday === 2 ? 600 : 900, busy(!s.cookingWithChild));
+  if (s.mealPrepDays.includes(weekday) && s.mealPrepDurationMin > 0 && !hasFixedCooking) {
+    const slot = findSlot(s.mealPrepDurationMin, Math.max(wakeTime + morningDuration, 480), 1260, weekday === 2 ? 600 : 900, busy(!s.cookingWithChild, true));
     if (slot === undefined) warnings.push(s.cookingWithChild
       ? `Meal prep: no entran ${s.mealPrepDurationMin} min de cocina entre los compromisos actuales, incluso habilitando cocinar con [PEQUE].`
       : `Meal prep: no entran ${s.mealPrepDurationMin} min de cocina fuera del cuidado de [PEQUE]. Cambiá el día, disponé de cobertura o habilitá explícitamente cocinar con ella.`);
@@ -441,7 +485,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   if (weekday >= 2 && weekday <= 5 && weekday !== s.recordingDay && s.flexibleWorkMin > 0) {
     let remaining = s.flexibleWorkMin;
     let block = 0;
-    const openings = freeRanges(Math.max(480, wakeTime + morningDuration), 1140, busy(true));
+    const openings = freeRanges(Math.max(480, wakeTime + morningDuration), 1140, busy(true, true));
     for (const opening of openings) {
       if (remaining <= 0) break;
       const duration = Math.min(remaining, opening.end - opening.start);

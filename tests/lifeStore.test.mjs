@@ -88,6 +88,21 @@ test('datos parciales y campos nuevos heredan defaults sin subirlos',async () =>
   assert.equal(s.useLifeState('settings',settings)[0].schoolStart,'08:00');
 });
 
+test('ajustes nuevos de ensayo y cocina aceptan respaldo anterior y validan horas y booleanos estrictos',async () => {
+  const s = await store();
+  const config = {...settings,mondayEveningEnabled:false,mondayEveningName:'Ensayo',mondayEveningStart:'16:30',mondayEveningEnd:'20:00',mondayEveningTravelMin:0,mondayReturnCompanion:'Compañía a confirmar',mondayReturnTravelConfirmed:false,mealPrepTuesdayStart:'',mealPrepFridayStart:''};
+  s.useLifeState('settings',config);
+  s.restoreLifeBackup({version:1,sections:{settings:{childName:'Mi peque'}}});
+  assert.equal(s.useLifeState('settings',config)[0].mondayEveningEnabled,false);
+  s.restoreLifeBackup({version:1,sections:{settings:{mondayEveningEnabled:true,mealPrepTuesdayStart:'10:30',mealPrepFridayStart:'10:30'}}});
+  assert.equal(s.useLifeState('settings',config)[0].mondayEveningEnabled,true);
+  assert.equal(s.useLifeState('settings',config)[0].mealPrepTuesdayStart,'10:30');
+  for (const invalid of [{mondayEveningEnabled:'true'},{mondayReturnTravelConfirmed:'false'},{mondayEveningEnd:'27:00'},{mealPrepTuesdayStart:'25:10'},{mealPrepFridayStart:630}]) assert.throws(() => s.restoreLifeBackup({version:1,sections:{settings:invalid}}));
+  assert.equal(s.useLifeState('settings',config)[0].mealPrepFridayStart,'10:30','un respaldo inválido conserva los datos vigentes');
+  s.restoreLifeBackup({version:1,sections:{settings:{mealPrepTuesdayStart:''}}});
+  assert.equal(s.useLifeState('settings',config)[0].mealPrepTuesdayStart,'','el modo automático anterior sigue disponible');
+});
+
 test('validación completa rechaza un compromiso roto sin restaurar otras secciones',async () => {
   const s = await store();
   s.useLifeState('settings',settings);s.useLifeState('extras',[]);

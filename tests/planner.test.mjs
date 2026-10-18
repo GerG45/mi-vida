@@ -90,6 +90,51 @@ test('lunes A no lleva al jardín; calcula su viaje desde casa', () => {
   assert.equal(day.wakeTime, 435);
 });
 
+test('lunes A y B permanecen en destino hasta ensayo 16:30–20 y regresan después, sin entrenamiento lunes o domingo', () => {
+  const config = settings({mondayEveningEnabled:true, mondayEveningName:'Ensayo de orquesta', mondayReturnCompanion:'mi acompañante', gymDays:[2,3,4,5,6]});
+  for (const date of ['2026-10-19','2026-10-26']) {
+    const day = buildDay(date, config, {}, []);
+    const rehearsal = day.events.find(e => e.id === 'monday-rehearsal');
+    assert.equal(rehearsal.title, 'Ensayo de orquesta');
+    assert.equal(rehearsal.start, 990);
+    assert.equal(rehearsal.end, 1200);
+    assert.equal(rehearsal.fixed, true);
+    assert.equal(rehearsal.tentative, false, 'el fin laboral desconocido no vuelve tentativo el ensayo confirmado');
+    const back = day.events.find(e => e.id === 'cordoba-back');
+    assert.equal(back.start, 1200);
+    assert.equal(back.end, 1260);
+    assert.equal(back.tentative, true);
+    assert.match(back.detail, /mi acompañante/);
+    assert.equal(day.events.some(e => e.id.startsWith('gym')), false);
+    assert.ok(day.pending.some(p => p.includes('terminás de trabajar')));
+    assert.ok(day.pending.some(p => p.includes('traslado entre el trabajo y el ensayo')));
+    assert.equal(day.events.filter(e => e.kind === 'meal').length, 4, 'se conserva la comida en destino antes del ensayo');
+  }
+  for (const date of ['2026-10-18','2026-10-25']) assert.equal(buildDay(date, config, {}, []).events.some(e => e.id.startsWith('gym')), false);
+  const confirmed = buildDay('2026-10-19', {...config,mondayReturnTravelConfirmed:true}, {}, []);
+  assert.equal(confirmed.events.find(e => e.id === 'cordoba-back').tentative, false);
+  assert.equal(confirmed.pending.some(p => p.includes('Regreso después del ensayo')), false);
+});
+
+test('el lunes con ensayo protege permanencia fuera de casa y detecta un fin laboral incompatible', () => {
+  const config = settings({mondayEveningEnabled:true, cordobaWorkMin:300, gymDurationMin:30, gymTravelMin:0, showerMin:0});
+  const day = buildDay('2026-10-19', config, {}, []);
+  for (const event of day.events.filter(e => e.id.startsWith('gym'))) assert.ok(event.end <= 470 || event.start >= 1260, 'el hueco entre trabajo y ensayo no es un regreso a casa');
+  const overlap = buildDay('2026-10-19', {...config,cordobaWorkMin:600,mondayEveningTravelMin:15}, {}, []);
+  assert.equal(overlap.events.find(e => e.id === 'monday-rehearsal').conflict, true);
+  assert.equal(overlap.events.find(e => e.id === 'monday-rehearsal-out').start, 975);
+  assert.ok(overlap.warnings.some(w => w.includes('Se superponen') && w.includes('Ensayo')));
+});
+
+test('configuración anterior conserva el regreso laboral y no activa ensayo nuevo', () => {
+  const legacy = settings();
+  for (const field of ['mondayEveningEnabled','mondayEveningName','mondayEveningStart','mondayEveningEnd','mondayEveningTravelMin','mondayReturnCompanion','mondayReturnTravelConfirmed','mealPrepTuesdayStart','mealPrepFridayStart']) delete legacy[field];
+  const monday = buildDay('2026-10-19', legacy, {}, []);
+  assert.equal(monday.events.some(e => e.id === 'monday-rehearsal'), false);
+  assert.equal(monday.events.find(e => e.id === 'cordoba-back').start, 930);
+  for (const value of ['true','false',1]) assert.equal(buildDay('2026-10-19', {...legacy,mondayEveningEnabled:value}, {}, []).events.some(e => e.id === 'monday-rehearsal'), false);
+});
+
 test('desayuno adicional despierta 06:25 y deja preparación y margen separados', () => {
   const day = buildDay('2026-10-19', settings({ breakfastInPreparation: false }), {}, []);
   assert.equal(day.wakeTime, 385);
@@ -170,6 +215,36 @@ test('cocinar durante el cuidado requiere opción explícita y entonces puede us
   assert.ok(cooking.start >= 780);
   assert.equal(cooking.conflict, undefined);
   assert.ok(cooking.detail.includes('habilitado por vos'));
+});
+
+test('las dos tandas de cocina fijas se reservan antes del gimnasio y trabajo sin duplicarse', () => {
+  const config = settings({mealPrepTuesdayStart:'10:30',mealPrepFridayStart:'10:30',gymDays:[2,3,4,5,6]});
+  for (const date of ['2026-10-20','2026-10-23','2026-10-27','2026-10-30']) {
+    const day = buildDay(date, config, {}, []);
+    const cooking = day.events.filter(e => e.id === 'meal-prep');
+    assert.equal(cooking.length, 1);
+    assert.equal(cooking[0].start, 630);
+    assert.equal(cooking[0].end, 720);
+    assert.equal(cooking[0].fixed, true);
+    assert.equal(cooking[0].conflict, undefined);
+    assert.match(cooking[0].detail, /horario fijo elegido por vos/);
+    for (const event of day.events.filter(e => e.id.startsWith('gym') || e.id.startsWith('flex-work'))) assert.equal(intersects(cooking[0], event), false);
+  }
+});
+
+test('la cocina fija conserva su horario y avisa conflictos de compromisos y cuidado', () => {
+  const config = settings({mealPrepTuesdayStart:'10:30'});
+  const extra = {id:'turno',title:'Turno',date:'2026-10-20',startHHmm:'11:00',durationMin:30,travelMin:0,kind:'personal'};
+  const clash = buildDay('2026-10-20', config, {}, [extra]);
+  assert.equal(clash.events.find(e => e.id === 'meal-prep').start, 630);
+  assert.equal(clash.events.find(e => e.id === 'meal-prep').conflict, true);
+  assert.ok(clash.warnings.some(w => w.includes('Se superponen') && w.includes('Turno')));
+  const care = buildDay('2026-10-20', {...config,mealPrepTuesdayStart:'14:00'}, {}, []);
+  assert.equal(care.events.find(e => e.id === 'meal-prep').start, 840);
+  assert.equal(care.events.find(e => e.id === 'meal-prep').conflict, true);
+  const permitted = buildDay('2026-10-20', {...config,mealPrepTuesdayStart:'14:00',cookingWithChild:true}, {}, []);
+  assert.equal(permitted.events.find(e => e.id === 'meal-prep').conflict, undefined);
+  assert.match(permitted.events.find(e => e.id === 'meal-prep').detail, /habilitado por vos/);
 });
 
 test('grabación pasó a miércoles 15–18; el martes no conserva ese bloque', () => {

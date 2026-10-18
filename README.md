@@ -14,7 +14,10 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 - Hábitos con señal y versión mínima, sin penalizar una pausa.
 - Ideas y reflexiones inspiradas en cuatro libros de James Clear y Robin Sharma, identificadas como redacción original; fuentes y páginas en la web.
 - Cocina por tandas, compras y rutina de entrenamiento de referencia.
+- Horarios fijos opcionales para las tandas del martes y viernes, y ensayo del lunes con regreso posterior configurable.
 - Copia local, respaldo JSON y calendario ICS. Sincronización privada por cuenta con Firebase.
+
+La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS breves. La preferencia del sistema de reducir movimiento desactiva las animaciones y transiciones. Los cambios visuales conservan las herramientas y los datos existentes.
 
 ## Usar en otro dispositivo
 

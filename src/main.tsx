@@ -4,6 +4,7 @@ import App from './App';
 import {bootstrapCloud} from './lib/cloud';
 import {isAndroidApp} from './lib/native';
 import './styles.css';
+import './wellness.css';
 if (isAndroidApp()) document.documentElement.classList.add('native-android');
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 

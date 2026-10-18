@@ -55,7 +55,8 @@ function normalizedEntry(section: string, key: string, value: unknown): unknown 
     if (section === 'profile') { if (!text(value,200)) throw new Error('Perfil no válido.');return value; }
     if (['gymDays','mealPrepDays'].includes(key)) { if (!weekdays(value)) throw new Error(`Días no válidos para ${key}.`); }
     else if (key === 'anchorMonday') { if (!date(value)) throw new Error('Fecha de referencia no válida.'); }
-    else if (['preferredBedtime','defaultWake','schoolStart','cordobaArrival','recordingStart'].includes(key)) { if (!time(value)) throw new Error(`Hora no válida para ${key}.`); }
+    else if (['preferredBedtime','defaultWake','schoolStart','cordobaArrival','recordingStart','mondayEveningStart','mondayEveningEnd'].includes(key)) { if (!time(value)) throw new Error(`Hora no válida para ${key}.`); }
+    else if (['mealPrepTuesdayStart','mealPrepFridayStart'].includes(key)) { if (value !== '' && !time(value)) throw new Error(`Hora de cocina no válida para ${key}.`); }
     else if (key === 'recordingCare') { if (!oneOf(value,['pending','withMe','covered'])) throw new Error('Cuidado de grabación no válido.'); }
     else if (key === 'danceTransport') { if (!oneOf(value,['pending','me','other'])) throw new Error('Traslado no válido.'); }
     else if (key === 'recordingDay') { if (!Number.isInteger(value) || !finite(value,0,6)) throw new Error('Día de grabación no válido.'); }
