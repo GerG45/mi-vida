@@ -28,7 +28,7 @@ export function WeeklyReport({ selected, snapshot }: WeeklyReportProps) {
       const report = buildWeeklyReport(snapshot(), week.start, { includeName, includeTasks, includePlanDetails });
       const exported = await exportTextFile(report.filename, '\uFEFF' + report.markdown, 'text/markdown;charset=utf-8');
       if (!exported) { setMessage('Guardado cancelado. Tus registros siguen guardados en Mi Vida.'); return; }
-      setMessage(`Reporte preparado: ${report.journalDays} días con registros de diario, ${report.habitMarks} marcas de hábitos y ${report.blockMarks} marcas de bloques. Abrí el archivo descargado para revisarlo antes de compartirlo.`);
+      setMessage(`Reporte preparado: ${report.journalDays} días con registros de diario, ${report.habitMarks} marcas de hábitos, ${report.blockMarks} marcas de bloques y ${report.trainingSessions} sesiones con series de entrenamiento registradas. Abrí el archivo descargado para revisarlo antes de compartirlo.`);
     } catch {
       setMessage('No pudimos guardar el archivo. Tus registros siguen guardados; volvé a intentarlo.');
     } finally {
@@ -40,13 +40,13 @@ export function WeeklyReport({ selected, snapshot }: WeeklyReportProps) {
     <div className="weekly-report-heading"><div><p className="eyebrow">UN MOMENTO PARA MIRAR TU SEMANA</p>
       <h2>Lo vivido también te guía.</h2><p>{closing ? 'Es un buen momento para cerrar la semana y pensar el próximo paso.' : 'Podés volver el domingo o el lunes, o descargar una semana cuando quieras.'}</p></div>
       <span className="weekly-report-spark" aria-hidden="true">✳</span></div>
-    <p className="weekly-report-description">Reuní tu diario, tus marcas de hábitos y la agenda en un reporte para conversar acá con Codex. Incluye tus escritos personales: revisalo antes de adjuntarlo al chat.</p>
+    <p className="weekly-report-description">Reuní tu diario, tus hábitos, la agenda y tus entrenamientos en un reporte para conversar acá con Codex. Incluye tus escritos personales: revisalo antes de adjuntarlo al chat.</p>
     <div className="weekly-report-period"><div><span>SEMANA DEL REPORTE</span><strong>{shortDate(week.start)} — {shortDate(week.end)}</strong><small>Lunes a domingo · {week.start.slice(0, 4)}</small></div>
       <div className="weekly-report-dates"><button className="icon-button" type="button" aria-label="Semana anterior del reporte" onClick={() => { setAnchor(addDays(week.start, -7)); setMessage(''); }}>‹</button>
         <label className="field"><span>Elegir una fecha de esa semana</span><input type="date" value={anchor} onChange={event => { if (event.target.value) { try { setAnchor(getReportWeek(event.target.value).start); setMessage(''); } catch { /* Keep the last valid calendar date. */ } } }} /></label>
         <button className="icon-button" type="button" aria-label="Semana siguiente del reporte" onClick={() => { setAnchor(addDays(week.start, 7)); setMessage(''); }}>›</button></div></div>
     <details className="weekly-report-options"><summary>Qué contiene y opciones del archivo</summary>
-      <p>Incluye las siete páginas del diario, ánimo y energía registrados, marcas de hábitos y bloques, avisos y horarios propuestos. Los horarios del plan no son mediciones de sueño ni de ejecución.</p>
+      <p>Incluye las siete páginas del diario, ánimo y energía registrados, hábitos, agenda y entrenamientos: series reales, cargas, aproximaciones, tiempos, RPE, molestias y notas. Distingue lo registrado de los horarios propuestos.</p>
       <label className="toggleline"><input type="checkbox" checked={includeTasks} onChange={event => setIncludeTasks(event.target.checked)} />Incluir mis pendientes y proyectos GTD actuales</label>
       <label className="toggleline"><input type="checkbox" checked={includePlanDetails} onChange={event => setIncludePlanDetails(event.target.checked)} />Agregar las explicaciones de cada bloque de la agenda</label>
       <label className="toggleline"><input type="checkbox" checked={includeName} onChange={event => setIncludeName(event.target.checked)} />Incluir mi nombre</label>

@@ -15,9 +15,15 @@ const sleepSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/sle
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
 }).outputText.replace(/from ['"]\.\/planner['"]/, `from '${plannerUrl}'`);
 const sleepUrl = `data:text/javascript;base64,${Buffer.from(sleepSource).toString('base64')}`;
+const trainingUrl = await moduleSource('../src/lib/training.ts');
+const training = await import(trainingUrl);
+const trainingReportSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/trainingReport.ts',import.meta.url),'utf8'),{
+  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022},
+}).outputText.replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`);
+const trainingReportUrl = `data:text/javascript;base64,${Buffer.from(trainingReportSource).toString('base64')}`;
 const reportSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/weeklyReport.ts', import.meta.url), 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
-}).outputText.replace(/from ['"]\.\/planner['"]/, `from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/, `from '${sleepUrl}'`);
+}).outputText.replace(/from ['"]\.\/planner['"]/, `from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/, `from '${sleepUrl}'`).replace(/from ['"]\.\/trainingReport['"]/,`from '${trainingReportUrl}'`);
 const { getReportWeek, getDefaultReportWeek, buildWeeklyReport } = await import(`data:text/javascript;base64,${Buffer.from(reportSource).toString('base64')}`);
 const backup = (sections = {}) => ({ version: 1, exportedAt: '2026-10-19T01:20:00.000Z', sections });
 
@@ -131,4 +137,58 @@ test('night advice belongs to the following morning, including the Monday outsid
   assert.match(report.markdown, /Acostarse propuesto para la noche anterior/);
   const midnight = buildWeeklyReport(backup({ settings: { ...defaults, scheduleEnabled: true, sleepHours: 8 }, overrides: { '2026-10-13': { schoolClosed: true, care: 'other', dropoff: 'other', pickup: 'other' } } }), '2026-10-12');
   assert.match(midnight.markdown, /Acostarse para el próximo día: \*\*2026-10-13 a las 00:00\*\*/);
+});
+
+function loggedGym(id,date,loadKg,now){
+  let session=training.createTrainingSession({id,date,week:1,day:1,now});
+  session=training.updateTrainingSet(session,0,'s0',{loadKg:10,reps:8});
+  session=training.completeTrainingSet(session,0,'s0',now+500);
+  session=training.updateTrainingSet(session,0,'s1',{loadKg,reps:10});
+  session=training.completeTrainingSet(session,0,'s1',now+1000);
+  return training.finishTrainingSession(session,now+120000);
+}
+test('reporte incluye series reales, aproximaciones y carga anterior de la misma variante sin contar precargas',()=>{
+  const prior=loggedGym('prior','2026-10-11',20,10000);
+  let current=training.createTrainingSession({id:'current',date:'2026-10-13',week:2,day:1,now:200000});
+  current=training.updateTrainingSet(current,0,'s0',{loadKg:10,reps:8});
+  current=training.completeTrainingSet(current,0,'s0',201000);
+  current=training.updateTrainingSet(current,0,'s1',{loadKg:22.5,reps:10});
+  current=training.completeTrainingSet(current,0,'s1',202000);
+  current=training.updateTrainingSet(current,0,'s2',{loadKg:99,reps:12});
+  current.exercises[0].rpe=7.5;current.exercises[0].discomfort=0;current.exercises[0].notes='Con control https://share.google/privado';
+  current=training.finishTrainingSession(current,320000);
+  const report=buildWeeklyReport(backup({gymSessions:{prior,current},done:{'2026-10-14:gym':true}}),'2026-10-18');
+  assert.equal(report.trainingSessions,1);
+  const gym=report.markdown.split('## Entrenamiento · registros guardados')[1];
+  assert.match(gym,/Series efectivas completadas: \*\*1\*\*/);
+  assert.match(gym,/Aproximaciones completadas: \*\*1\*\*/);
+  assert.match(gym,/S0 · Aproximación: \*\*10 kg\*\* · 8 repeticiones/);
+  assert.match(gym,/S1 · Serie efectiva: \*\*22,5 kg\*\* · 10 repeticiones/);
+  assert.match(gym,/Diferencia: \*\*\+2,5 kg\*\*/);
+  assert.match(gym,/RPE elegido: 7,5\/10/);
+  assert.match(gym,/Molestia elegida: 0\/10/);
+  assert.match(gym,/enlace de ubicación omitido/);
+  assert.doesNotMatch(gym,/99 kg|share\.google/);
+});
+
+test('reporte distingue borradores, parciales y antiguos importados sin inventar hechos',()=>{
+  const draft=training.createTrainingSession({id:'draft',date:'2026-10-13',week:1,day:2,now:10000});
+  draft.exercises[0].sets[1].loadKg=40;
+  const partial={...loggedGym('partial','2026-10-14',15,200000),status:'abandoned'};
+  const imported={...training.createTrainingSession({id:'old',date:'2026-10-15',week:1,day:3,now:400000}),status:'imported',activeStartedAt:null};
+  imported.exercises[0].sets[1].loadKg=60;
+  const report=buildWeeklyReport(backup({gymSessions:{draft,partial,old:imported}}),'2026-10-18');
+  assert.equal(report.trainingSessions,1);
+  assert.match(report.markdown,/Estado:\*\* En curso/);
+  assert.match(report.markdown,/Estado:\*\* Cerrada parcial/);
+  assert.match(report.markdown,/Estado:\*\* Historial importado/);
+  assert.match(report.markdown,/repeticiones y segundos sin registro/);
+  assert.doesNotMatch(report.markdown,/\*\*40 kg\*\*/);
+  const empty=buildWeeklyReport(backup({done:{'2026-10-13:gym':true}}),'2026-10-18');
+  assert.equal(empty.trainingSessions,0);
+  assert.match(empty.markdown,/No hay sesiones de gimnasio registradas/);
+  const undated={...imported,legacyDateUnknown:true};
+  const unknown=buildWeeklyReport(backup({gymSessions:{old:undated}}),'2026-10-18');
+  assert.match(unknown.markdown,/registros importados sin fecha de entrenamiento verificable/);
+  assert.doesNotMatch(unknown.markdown,/\*\*60 kg\*\*/);
 });

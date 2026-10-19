@@ -1,6 +1,7 @@
 import type { LifeBackup } from './lifeStore';
 import { addDays, buildDay, defaults, formatTime, type DayOverride, type ExtraEvent, type Settings } from './planner';
 import { getNightPlan } from './sleep';
+import { trainingReport } from './trainingReport';
 
 export type ReportWeek = { start: string; end: string; dates: string[] };
 export type WeeklyReportOptions = {
@@ -15,6 +16,7 @@ export type WeeklyReport = {
   journalDays: number;
   habitMarks: number;
   blockMarks: number;
+  trainingSessions: number;
 };
 
 type Data = Record<string, unknown>;
@@ -144,6 +146,9 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
     if (plan.pending.length) { lines.push('**Por definir en el sistema:**'); plan.pending.forEach(pending => lines.push(`- ${inline(pending)}`)); lines.push(''); }
   }
 
+  const training=trainingReport(sections.gymSessions,week.dates,created.getTime(),inline,quote);
+  lines.push(...training.lines);
+
   if (options.includeTasks !== false) {
     lines.push('## GTD · estado actual al exportar', '',
       'Esta sección muestra el estado actual de mis pendientes y proyectos, aunque hayan sido creados antes o después de la semana elegida. “Hecho” no significa “terminado durante esta semana”: no hay fecha de finalización guardada. La papelera queda fuera del reporte.', '');
@@ -184,5 +189,5 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
     '5. ¿Qué único cambio pequeño quiero probar la próxima semana y qué voy a registrar para saber si me ayudó?', '',
     'Al analizar, separar hechos registrados, hipótesis y datos que faltan. Proponer ajustes concretos sin convertir los espacios vacíos en fallas ni inferir diagnósticos.', '',
   );
-  return { filename: `Mi-Vida-reporte-${week.start}-al-${week.end}.md`, markdown: lines.join('\n'), week, journalDays, habitMarks, blockMarks };
+  return { filename: `Mi-Vida-reporte-${week.start}-al-${week.end}.md`, markdown: lines.join('\n'), week, journalDays, habitMarks, blockMarks, trainingSessions:training.trainingSessions };
 }

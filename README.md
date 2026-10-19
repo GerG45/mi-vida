@@ -13,7 +13,8 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 - Diario de mañana, cierre y escritura libre, con historial, búsqueda y reporte semanal descargable para revisar tus registros.
 - Hábitos con señal y versión mínima, sin penalizar una pausa.
 - Ideas y reflexiones inspiradas en cuatro libros de James Clear y Robin Sharma, identificadas como redacción original; fuentes y páginas en la web.
-- Cocina por tandas, compras y rutina de entrenamiento de referencia.
+- Cocina por tandas y compras. Gimnasio integrado: las tres rutinas originales y sus cuatro semanas, sesiones guiadas, aproximaciones, cargas, repeticiones, tiempos y descansos; historial, RPE, molestias, notas y rutinas personalizadas.
+- Videos por variante de ejercicio, ilustraciones locales y seguimiento de cargas que recupera el último registro de la misma variante. Los entrenamientos registrados se incluyen en el reporte semanal.
 - Horarios fijos opcionales para las tandas del martes y viernes, y ensayo del lunes con regreso posterior configurable.
 - Excepción por fecha para un lunes sin trabajo: entrenamiento por la mañana, ida en colectivo al ensayo y regreso habitual; miércoles y viernes se mantienen.
 - Creatina junto al desayuno como recordatorio personal, opciones con licuadora/minipimer y enlaces privados a tus lugares.
@@ -26,6 +27,8 @@ La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS
 Abrí la misma dirección y entrá con la misma cuenta Google en Ajustes. El estado debe indicar **Sincronizado con tu cuenta**. Si no iniciaste sesión, los cambios pertenecen solamente a ese navegador.
 
 La primera conexión lee los datos existentes antes de escribir. Los datos locales se pueden subir explícitamente a una cuenta vacía. Los cambios se guardan por entrada, tarea o ajuste; si se edita el mismo registro en dos dispositivos, prevalece la última escritura que acepta Firebase.
+
+Los entrenamientos y rutinas también se guardan por cuenta, funcionan sin conexión y forman parte del respaldo JSON. Conviene registrar cada sesión desde un solo dispositivo a la vez para evitar que dos ediciones de la misma sesión se reemplacen. Los videos externos necesitan conexión; la rutina, las ilustraciones y los registros funcionan sin ellos. Ver [gimnasio integrado](docs/TRAINING.md).
 
 ## Desarrollo
 

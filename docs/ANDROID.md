@@ -4,13 +4,17 @@ La APK incluye la interfaz dentro de la app: no necesita abrir la página en Chr
 
 ## Primera vez en el teléfono
 
-1. Instalar `Mi-Vida-0.5.2-debug.apk` y abrir Mi Vida.
+1. Instalar `Mi-Vida-0.6.0-debug.apk` encima de la versión anterior y abrir Mi Vida.
 2. En **Ajustes**, entrar con la misma cuenta Google. Esperar a que aparezcan los horarios personales y el estado de la nube.
 3. En **Alarmas**, permitir notificaciones y alarmas exactas. La pantalla completa es un permiso adicional; también se puede detener o posponer desde la notificación.
 4. Revisar el volumen de alarmas y tocar **Probar alarma en 30 segundos**. Bloquear la pantalla y comprobar sonido, Detener y Posponer antes de usar el despertador de la agenda.
 5. Activar el despertar calculado, los recordatorios elegidos o una alarma puntual. Revisar la próxima alarma y el estado confirmado por Android.
 
 En Xiaomi/POCO, revisar el inicio automático y las restricciones de batería de Mi Vida si la prueba no funciona con la pantalla bloqueada. La app muestra los permisos que Android permite consultar; no afirma conocer el estado de los ajustes específicos de HyperOS.
+
+## Gimnasio de la versión 0.6.0
+
+Integra el gimnasio completo dentro de Mi Vida: sesión guiada, aproximaciones, cargas, repeticiones o segundos, descansos, RPE, molestias, notas, rutinas propias e historial. Se sincroniza con la misma cuenta Firebase y se incluye en el reporte semanal. Ver [uso del gimnasio](TRAINING.md). La actualización conserva el paquete, la firma, el ícono del brote y los sonidos de despertador y recordatorios.
 
 ## Ícono de la versión 0.5.2
 

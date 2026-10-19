@@ -518,7 +518,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
       }
       let cursor = slot;
       push('gym-out', 'Ir a entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de ida.`, false);
-      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. La rutina y la intensidad se definen aparte.' : 'Bloque de entrenamiento. La rutina y la intensidad se definen aparte.', false);
+      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.' : 'Bloque de entrenamiento. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.', false);
       push('gym-back', 'Volver de entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de regreso.`, false);
       push('gym-shower', 'Ducha y cambio', cursor, cursor + s.showerMin, 'personal', `${s.showerMin} min después de entrenar.`, false);
     }

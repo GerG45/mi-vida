@@ -4,12 +4,15 @@ import fs from 'node:fs/promises';
 import ts from 'typescript';
 
 let instance = 0;
+const trainingSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/training.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const trainingUrl = `data:text/javascript;base64,${Buffer.from(trainingSource).toString('base64')}`;
+const training = await import(trainingUrl);
 async function store() {
   const items = new Map();
   globalThis.localStorage = {getItem:key => items.get(key) ?? null,setItem:(key,value) => items.set(key,String(value)),removeItem:key => items.delete(key)};
   const source = await fs.readFile(new URL('../src/lib/lifeStore.ts',import.meta.url),'utf8');
   const {outputText} = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}});
-  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();');
+  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();').replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`);
   const api = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}#${++instance}`);
   return {...api,items};
 }
@@ -161,4 +164,43 @@ test('respaldo sólo exporta secciones de la cuenta visible, sin config ni contr
   assert.deepEqual(Object.keys(backup.sections),['profile']);
   assert(!JSON.stringify(backup).includes('apiKey'));
   assert.equal(backup.sections.profile.name,'Mi nombre');
+});
+
+test('entrenamiento activo se respalda, sincroniza por sesión y permanece aislado por cuenta',async()=>{
+  const s=await store();
+  s.useLifeState('gymSessions',{});s.useLifeState('gymRoutines',{});
+  const session=training.createTrainingSession({id:'sesion-1',date:'2026-10-19',week:1,day:1,now:10000});
+  s.setStoreScope('project:userA');
+  s.restoreLifeBackup({version:1,sections:{gymSessions:{[session.id]:session}}});
+  assert.equal(s.getPendingRecords().length,1);
+  assert.equal(s.getPendingRecords()[0].section,'gymSessions');
+  assert.equal(s.getPendingRecords()[0].key,'sesion-1');
+  assert.deepEqual(s.getLifeBackup().sections.gymSessions[session.id],session);
+  s.setStoreScope('project:userB');
+  assert.deepEqual(s.useLifeState('gymSessions',{})[0],{});
+  assert.deepEqual(s.getPendingRecords(),[]);
+  s.setStoreScope('project:userA');
+  assert.equal(s.useLifeState('gymSessions',{})[0][session.id].status,'active');
+  s.receiveCloudSnapshot([]);
+  assert.equal(s.useLifeState('gymSessions',{})[0][session.id].status,'active','un borrador pendiente sobrevive a reconectar');
+  s.restoreLifeBackup({version:1,sections:{journal:{'2026-10-19':{freeText:'Copia anterior'}}}});
+  assert(s.getLifeBackup().sections.gymSessions[session.id],'una copia parcial anterior no borra el gimnasio');
+});
+
+test('sesiones inválidas rechazan el respaldo entero antes de modificar otras secciones',async()=>{
+  const s=await store();s.useLifeState('profile',{name:'Actual'});s.useLifeState('gymSessions',{});
+  const session=training.createTrainingSession({id:'draft',date:'2026-10-19',week:1,day:2,now:10000});
+  session.exercises[0].sets[0].loadKg=-5;
+  assert.throws(()=>s.restoreLifeBackup({version:1,sections:{profile:{name:'No guardar'},gymSessions:{draft:session}}}),/Sesión/);
+  assert.equal(s.useLifeState('profile',{name:''})[0].name,'Actual');
+  assert.deepEqual(s.useLifeState('gymSessions',{})[0],{});
+  assert.equal(s.isLifeRecord({section:'gymSessions',key:'draft',value:session,deleted:false,updatedAt:10000}),false);
+  assert.deepEqual(s.decodeRecordId(s.recordId('gymRoutines','mi-rutina')),{section:'gymRoutines',key:'mi-rutina'});
+});
+
+test('una sesión remota se hidrata aunque el módulo se registre después de conectar',async()=>{
+  const s=await store();s.setStoreScope('project:userA');
+  const session=training.createTrainingSession({id:'remote',date:'2026-10-19',week:1,day:3,now:10000});
+  s.receiveCloudSnapshot([{section:'gymSessions',key:'remote',value:session,deleted:false,updatedAt:10000}]);
+  assert.deepEqual(s.useLifeState('gymSessions',{})[0].remote,session);
 });
