@@ -21,9 +21,14 @@ const trainingReportSource = ts.transpileModule(await fs.readFile(new URL('../sr
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022},
 }).outputText.replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`);
 const trainingReportUrl = `data:text/javascript;base64,${Buffer.from(trainingReportSource).toString('base64')}`;
+const workChecklistUrl = await moduleSource('../src/lib/workChecklist.ts');
+const workChecklistReportSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/workChecklistReport.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
+}).outputText.replace(/from ['"]\.\/workChecklist['"]/, `from '${workChecklistUrl}'`);
+const workChecklistReportUrl = `data:text/javascript;base64,${Buffer.from(workChecklistReportSource).toString('base64')}`;
 const reportSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/weeklyReport.ts', import.meta.url), 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
-}).outputText.replace(/from ['"]\.\/planner['"]/, `from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/, `from '${sleepUrl}'`).replace(/from ['"]\.\/trainingReport['"]/,`from '${trainingReportUrl}'`);
+}).outputText.replace(/from ['"]\.\/planner['"]/, `from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/, `from '${sleepUrl}'`).replace(/from ['"]\.\/trainingReport['"]/,`from '${trainingReportUrl}'`).replace(/from ['"]\.\/workChecklistReport['"]/, `from '${workChecklistReportUrl}'`);
 const { getReportWeek, getDefaultReportWeek, buildWeeklyReport } = await import(`data:text/javascript;base64,${Buffer.from(reportSource).toString('base64')}`);
 const backup = (sections = {}) => ({ version: 1, exportedAt: '2026-10-19T01:20:00.000Z', sections });
 
@@ -191,4 +196,71 @@ test('reporte distingue borradores, parciales y antiguos importados sin inventar
   const unknown=buildWeeklyReport(backup({gymSessions:{old:undated}}),'2026-10-18');
   assert.match(unknown.markdown,/registros importados sin fecha de entrenamiento verificable/);
   assert.doesNotMatch(unknown.markdown,/\*\*60 kg\*\*/);
+});
+
+const workItem = (id, date, patch = {}) => ({
+  id, date, blockId: 'flex-work', title: `Tarea ${id}`, done: false, estimatedMinutes: null,
+  createdAt: Date.parse('2026-10-10T12:00:00Z'), completedAt: null, order: 0,
+  elapsedSeconds: 0, timerStartedAt: null, ...patch,
+});
+
+test('work checklists use assigned dates, preserve current checks and never turn estimates into measured work', () => {
+  const report = buildWeeklyReport(backup({
+    workItems: {
+      before: workItem('before', '2026-10-11', { title: 'Fuera del rango anterior', done: true, completedAt: Date.parse('2026-10-12T12:00:00Z') }),
+      checked: workItem('checked', '2026-10-13', { title: 'Preparar una propuesta', done: true, completedAt: Date.parse('2026-10-19T12:00:00Z'), estimatedMinutes: 30 }),
+      future: workItem('future', '2026-10-20', { title: 'Fuera del rango posterior' }),
+      pending: workItem('pending', '2026-10-14', { title: 'Revisar las notas', estimatedMinutes: 20 }),
+    },
+    done: { '2026-10-15:flex-work-0': true },
+    tasks: { old: { title: 'Una acción GTD', status: 'done' } },
+  }), '2026-10-18');
+  assert.equal(report.workItems, 2);
+  assert.equal(report.workItemMarks, 1);
+  const work = report.markdown.split('## Trabajo / proyectos · listas guardadas por fecha')[1].split('## Entrenamiento')[0];
+  assert.match(work, /\[x\] Preparar una propuesta · Estimación: 30 min · Sin tiempo acumulado/);
+  assert.match(work, /\[ \] Revisar las notas · Estimación: 20 min · Sin tiempo acumulado/);
+  assert.match(work, /\*\*50 min\*\*/);
+  assert.match(work, /check muestra el estado guardado al exportar/);
+  assert.doesNotMatch(work, /Fuera del rango|Una acción GTD|Cronómetro: 30|Cronómetro: 20/);
+});
+
+test('work report separates an optional stopwatch, captures running time at export and omits location links and raw block IDs', () => {
+  const report = buildWeeklyReport(backup({ workItems: {
+    stopped: workItem('stopped', '2026-10-13', { blockId: 'cordoba-work', title: 'Enviar https://share.google/ubicacion-privada', elapsedSeconds: 90 }),
+    running: workItem('running', '2026-10-13', { blockId: 'private-address-123', title: 'Revisar plan', timerStartedAt: Date.parse('2026-10-19T01:18:00.000Z'), elapsedSeconds: 30 }),
+  } }), '2026-10-18', { includeTasks: false });
+  assert.equal(report.workItems, 2);
+  assert.equal(report.workItemMarks, 0);
+  const work = report.markdown.split('## Trabajo / proyectos · listas guardadas por fecha')[1].split('## Entrenamiento')[0];
+  assert.match(work, /Cronómetro: 1,5 min/);
+  assert.match(work, /Cronómetro: 2,5 min · en marcha al exportar/);
+  assert.match(work, /\*\*4 min\*\*/);
+  assert.match(work, /incluidas las distracciones/);
+  assert.match(work, /enlace de ubicación omitido/);
+  assert.doesNotMatch(work, /ubicacion-privada|private-address-123/);
+});
+
+test('old backups and malformed work records do not invent checklist data from agenda or GTD', () => {
+  const report = buildWeeklyReport(backup({ done: { '2026-10-13:flex-work-0': true }, workItems: {
+    wrongDate: workItem('wrongDate', '2026-02-30'),
+    wrongShape: { title: 'No es un ítem válido' },
+  } }), '2026-10-18');
+  assert.equal(report.workItems, 0);
+  assert.equal(report.workItemMarks, 0);
+  assert.match(report.markdown, /No hay ítems de trabajo guardados/);
+  assert.doesNotMatch(report.markdown, /No es un ítem válido/);
+});
+
+test('work report joins split agenda blocks without dropping their saved checklist items', () => {
+  const report = buildWeeklyReport(backup({ workItems: {
+    a: workItem('a', '2026-10-13', { blockId: 'flex-work-0', title: 'Primera acción' }),
+    b: workItem('b', '2026-10-13', { blockId: 'flex-work-1', title: 'Segunda acción', order: 1 }),
+    c: workItem('c', '2026-10-13', { blockId: 'flex-work', title: 'Tercera acción', order: 2 }),
+  } }), '2026-10-18');
+  const work = report.markdown.split('## Trabajo / proyectos · listas guardadas por fecha')[1].split('## Entrenamiento')[0];
+  assert.equal(report.workItems, 3);
+  assert.equal((work.match(/\*\*Trabajo \/ proyectos\*\*/g) || []).length, 1);
+  assert.ok(work.indexOf('Primera acción') < work.indexOf('Segunda acción'));
+  assert.ok(work.indexOf('Segunda acción') < work.indexOf('Tercera acción'));
 });

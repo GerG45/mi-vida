@@ -10,6 +10,7 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 
 - Agenda que calcula el despertar a partir del primer compromiso, la preparación y los viajes, y cuándo acostarse para despertar al día siguiente. Alternancia familiar de dos semanas, excepciones por fecha y detección de cruces.
 - Bandeja GTD, próximas acciones, proyectos, esperas, algún día, referencia y revisión semanal. Sólo se agenda una acción cuando elegís fecha y hora.
+- Listas de Trabajo / proyectos por fecha: prepararlas con anticipación o durante el bloque, completar checks y asignar minutos opcionales a cada paso. Cronómetro con pausa, edición, orden y recuperación de tareas quitadas. Los registros se sincronizan y entran en el reporte semanal.
 - Diario de mañana, cierre y escritura libre, con historial, búsqueda y reporte semanal descargable para revisar tus registros.
 - Hábitos con señal y versión mínima, sin penalizar una pausa.
 - Ideas y reflexiones inspiradas en cuatro libros de James Clear y Robin Sharma, identificadas como redacción original; fuentes y páginas en la web.

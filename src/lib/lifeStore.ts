@@ -1,7 +1,8 @@
 import { useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
 import { normalizeTrainingSession, normalizeTrainingRoutine } from './training';
+import { normalizeWorkItem } from './workChecklist';
 
-export const LIFE_SECTIONS = ['settings','profile','overrides','extras','done','shopping','journal','habits','habitChecks','tasks','projects','review','gymSessions','gymRoutines'] as const;
+export const LIFE_SECTIONS = ['settings','profile','overrides','extras','done','shopping','journal','habits','habitChecks','tasks','projects','review','gymSessions','gymRoutines','workItems'] as const;
 export type LifeSection = typeof LIFE_SECTIONS[number];
 export interface LifeRecord { section: string; key: string; value: unknown; deleted: boolean; updatedAt: number }
 export interface LifeBackup { version: 1; exportedAt: string; sections: Record<string, unknown> }
@@ -47,6 +48,7 @@ const taskTemplate = {notes:'',status:'inbox',context:'',minutes:15,energy:'medi
 const taskStatuses = ['inbox','next','waiting','someday','reference','done','trash'];
 function normalizedEntry(section: string, key: string, value: unknown): unknown {
   if (!safeKey(key)) throw new Error('Clave de entrada no válida.');
+  if (section === 'workItems') { const entry=normalizeWorkItem(value,key);if(!entry)throw new Error('Tarea del bloque de trabajo no válida.');return entry; }
   if (section === 'gymSessions') { const entry=normalizeTrainingSession(value,key);if(!entry)throw new Error('Sesión de entrenamiento no válida.');return entry; }
   if (section === 'gymRoutines') { const entry=normalizeTrainingRoutine(value,key);if(!entry)throw new Error('Rutina de entrenamiento no válida.');return entry; }
   if (['done','shopping','habitChecks','review'].includes(section)) { if (typeof value !== 'boolean') throw new Error(`Marca no válida en ${section}.`);return value; }

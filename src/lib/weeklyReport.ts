@@ -2,6 +2,7 @@ import type { LifeBackup } from './lifeStore';
 import { addDays, buildDay, defaults, formatTime, type DayOverride, type ExtraEvent, type Settings } from './planner';
 import { getNightPlan } from './sleep';
 import { trainingReport } from './trainingReport';
+import { workChecklistReport } from './workChecklistReport';
 
 export type ReportWeek = { start: string; end: string; dates: string[] };
 export type WeeklyReportOptions = {
@@ -17,6 +18,8 @@ export type WeeklyReport = {
   habitMarks: number;
   blockMarks: number;
   trainingSessions: number;
+  workItems: number;
+  workItemMarks: number;
 };
 
 type Data = Record<string, unknown>;
@@ -146,6 +149,8 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
     if (plan.pending.length) { lines.push('**Por definir en el sistema:**'); plan.pending.forEach(pending => lines.push(`- ${inline(pending)}`)); lines.push(''); }
   }
 
+  const work=workChecklistReport(sections.workItems,week.dates,created.getTime(),inline);
+  lines.push(...work.lines);
   const training=trainingReport(sections.gymSessions,week.dates,created.getTime(),inline,quote);
   lines.push(...training.lines);
 
@@ -189,5 +194,5 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
     '5. ¿Qué único cambio pequeño quiero probar la próxima semana y qué voy a registrar para saber si me ayudó?', '',
     'Al analizar, separar hechos registrados, hipótesis y datos que faltan. Proponer ajustes concretos sin convertir los espacios vacíos en fallas ni inferir diagnósticos.', '',
   );
-  return { filename: `Mi-Vida-reporte-${week.start}-al-${week.end}.md`, markdown: lines.join('\n'), week, journalDays, habitMarks, blockMarks, trainingSessions:training.trainingSessions };
+  return { filename: `Mi-Vida-reporte-${week.start}-al-${week.end}.md`, markdown: lines.join('\n'), week, journalDays, habitMarks, blockMarks, trainingSessions:training.trainingSessions, workItems:work.workItems, workItemMarks:work.workItemMarks };
 }

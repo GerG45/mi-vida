@@ -7,12 +7,15 @@ let instance = 0;
 const trainingSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/training.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const trainingUrl = `data:text/javascript;base64,${Buffer.from(trainingSource).toString('base64')}`;
 const training = await import(trainingUrl);
+const workSource=ts.transpileModule(await fs.readFile(new URL('../src/lib/workChecklist.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const workUrl=`data:text/javascript;base64,${Buffer.from(workSource).toString('base64')}`;
+const work=await import(workUrl);
 async function store() {
   const items = new Map();
   globalThis.localStorage = {getItem:key => items.get(key) ?? null,setItem:(key,value) => items.set(key,String(value)),removeItem:key => items.delete(key)};
   const source = await fs.readFile(new URL('../src/lib/lifeStore.ts',import.meta.url),'utf8');
   const {outputText} = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}});
-  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();').replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`);
+  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();').replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`).replace(/from ['"]\.\/workChecklist['"]/,`from '${workUrl}'`);
   const api = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}#${++instance}`);
   return {...api,items};
 }
@@ -203,4 +206,46 @@ test('una sesión remota se hidrata aunque el módulo se registre después de co
   const session=training.createTrainingSession({id:'remote',date:'2026-10-19',week:1,day:3,now:10000});
   s.receiveCloudSnapshot([{section:'gymSessions',key:'remote',value:session,deleted:false,updatedAt:10000}]);
   assert.deepEqual(s.useLifeState('gymSessions',{})[0].remote,session);
+});
+
+test('listas de trabajo sincronizan por ítem, conservan otras fechas y generan tombstone al quitar',async()=>{
+  const s=await store();s.useLifeState('workItems',{});s.setStoreScope('project:userA');
+  const a=work.createWorkItem({id:'work-a',date:'2026-10-20',blockId:'flex-work-0',title:'Primer paso',now:10000});
+  const b=work.createWorkItem({id:'work-b',date:'2026-10-23',blockId:'flex-work-0',title:'Para el viernes',estimatedMinutes:25,now:11000});
+  s.restoreLifeBackup({version:1,sections:{workItems:{[a.id]:a,[b.id]:b}}});
+  const pending=s.getPendingRecords();assert.equal(pending.length,2);
+  assert(pending.every(record=>record.section==='workItems'&&!record.deleted));
+  s.acknowledgeRecords(pending);
+  const [,setItems]=s.useLifeState('workItems',{});
+  setItems(all=>{const next={...all};delete next[a.id];return next;});
+  assert.equal(s.getPendingRecords().length,1);
+  assert.equal(s.getPendingRecords()[0].key,a.id);
+  assert.equal(s.getPendingRecords()[0].deleted,true);
+  assert.deepEqual(s.getLifeBackup().sections.workItems,{[b.id]:b});
+  s.setStoreScope('project:userB');assert.deepEqual(s.useLifeState('workItems',{})[0],{});
+  s.setStoreScope('project:userA');assert.deepEqual(s.useLifeState('workItems',{})[0],{[b.id]:b});
+  s.restoreLifeBackup({version:1,sections:{journal:{'2026-10-20':{freeText:'Respaldo anterior'}}}});
+  assert.deepEqual(s.getLifeBackup().sections.workItems,{[b.id]:b},'restaurar una copia anterior no borra las nuevas listas');
+});
+
+test('tareas de trabajo inválidas rechazan el respaldo completo sin modificar el diario',async()=>{
+  const s=await store();s.useLifeState('journal',{});s.useLifeState('workItems',{});
+  const item=work.createWorkItem({id:'one',date:'2026-10-20',blockId:'flex-work',title:'Un paso',now:10000});
+  for(const patch of [{estimatedMinutes:-1},{done:true},{title:''},{date:'2026-02-30'},{timerStartedAt:1},{unexpected:true}]){
+    const invalid={...item,...patch};
+    assert.throws(()=>s.restoreLifeBackup({version:1,sections:{journal:{'2026-10-20':{freeText:'No aplicar'}},workItems:{one:invalid}}}));
+  }
+  assert.deepEqual(s.useLifeState('journal',{})[0],{});
+  assert.deepEqual(s.useLifeState('workItems',{})[0],{});
+});
+
+test('un checklist remoto se hidrata después de conectar y mantiene su temporizador',async()=>{
+  const s=await store();s.setStoreScope('project:userA');
+  const item=work.startWorkItem(work.createWorkItem({id:'remote-work',date:'2026-10-20',blockId:'flex-work',title:'Concentrarme',now:10000}),20000);
+  s.receiveCloudSnapshot([{section:'workItems',key:item.id,value:item,deleted:false,updatedAt:20000}]);
+  const restored=s.useLifeState('workItems',{})[0][item.id];
+  assert.deepEqual(restored,item);
+  assert.equal(work.getWorkItemElapsed(restored,50000),30);
+  s.receiveCloudSnapshot([{section:'workItems',key:item.id,value:null,deleted:true,updatedAt:30000}]);
+  assert.deepEqual(s.useLifeState('workItems',{})[0],{});
 });
