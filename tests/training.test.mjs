@@ -13,6 +13,14 @@ function record(session,index,setId,{loadKg=20,reps=10,durationSeconds=null}={},
 const legacyExercise=(patch={})=>({id:'w1-d1-e1',name:'Sentadilla goblet / prensa',hasWarmupSet:true,loads:{},status:'Pendiente',notes:'',...patch});
 const legacy=(exercises,extra={})=>({version:1,state:{plan:{weeks:[{week:1,days:[{day:1,exercises}]}]},logs:[],customSessions:[],...extra}});
 
+test('an active session from a closed day stops accumulating projected time after midnight',()=>{
+ const start=new Date(2026,9,19,23,59,30).getTime();
+ const session=fresh({date:'2026-10-19',now:start});const snapshot=JSON.stringify(session);
+ assert.equal(gym.getTrainingElapsed(session,new Date(2026,9,20,0,2).getTime()),30);
+ assert.equal(gym.getTrainingElapsed(session,new Date(2026,9,21,12).getTime()),30);
+ assert.equal(JSON.stringify(session),snapshot);
+});
+
 test('retains original four weeks, three days, all 21 exercises and original source IDs without seeded 60kg data',()=>{
  assert.equal(gym.TRAINING_WEEKS.length,4);assert.equal(gym.TRAINING_DAYS.length,3);assert.equal(gym.TRAINING_EXERCISES.length,21);
  const session=fresh();assert.equal(session.exercises[0].sourceExerciseId,'w1-d1-e1');

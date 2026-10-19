@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { normalizeMapsUrl, type DayOverride, type Settings } from '../lib/planner';
+import {getDateAccess} from '../lib/datePolicy';
 import './routines.css';
 
 const places = [
@@ -33,13 +34,13 @@ export function PersonalPlaces({settings,patch}:{settings:Settings;patch:<K exte
   </section>;
 }
 
-export function PewenException({date,settings,override,onChange}:{date:string;settings:Settings;override?:DayOverride;onChange:(skip:boolean)=>void}) {
+export function PewenException({date,settings,override,onChange,readOnly=false}:{date:string;settings:Settings;override?:DayOverride;onChange:(skip:boolean)=>void;readOnly?:boolean}) {
   if (!settings.scheduleEnabled || new Date(date+'T12:00:00').getDay() !== 1) return null;
   return <section className="panel pewen-exception" aria-label="Trabajo de este lunes">
     <div><p className="eyebrow">SÓLO PARA ESTE LUNES</p><h2>{override?.skipPewen?'Una mañana para vos':'Tu lunes de trabajo'}</h2>
       <p className="muted">{override?.skipPewen?'Se libera el viaje de trabajo y se busca entrenamiento desde las 08:15. Si el jardín se cruza, se acomoda después del regreso y la agenda te avisa.':'Si esta vez no vas, podés liberar la mañana sin recuperar la jornada otro día.'}</p>
       {settings.mondayEveningEnabled&&<p className="muted">{settings.mondayEveningName} y el regreso se mantienen.</p>}
     </div>
-    <label className="toggleline"><input type="checkbox" checked={override?.skipPewen===true} onChange={e=>onChange(e.target.checked)}/><span>Este lunes no voy a {settings.workLocation || 'trabajar'}</span></label>
+    <label className="toggleline"><input type="checkbox" checked={override?.skipPewen===true} disabled={readOnly} onChange={e=>{if(getDateAccess(date).canPlan)onChange(e.target.checked)}}/><span>Este lunes no voy a {settings.workLocation || 'trabajar'}</span></label>
   </section>;
 }

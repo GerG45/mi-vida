@@ -20,6 +20,11 @@ export function workChecklistReport(raw: unknown, dates: string[], exportedAt: n
   const marked = items.filter(item => item.done).length;
   const estimates = items.filter(item => item.estimatedMinutes !== null);
   const elapsed = (item: WorkItem): number => Number.isFinite(exportedAt) ? getWorkItemElapsed(item, exportedAt) : item.elapsedSeconds;
+  const stillRunning = (item: WorkItem): boolean => {
+    const dayEnd = new Date(`${item.date}T00:00:00`);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    return item.timerStartedAt !== null && Number.isFinite(exportedAt) && exportedAt < dayEnd.getTime();
+  };
   const timed = items.filter(item => elapsed(item) > 0 || item.timerStartedAt !== null);
   const lines = ['## Trabajo / proyectos · listas guardadas por fecha', '',
     `- Ítems asignados a estas fechas: **${items.length}**. Con check al exportar: **${marked}**.`,
@@ -28,7 +33,7 @@ export function workChecklistReport(raw: unknown, dates: string[], exportedAt: n
   if (!items.length) lines.push('No hay ítems de trabajo guardados para estas fechas. Las marcas de agenda y los pendientes GTD se muestran por separado.', '');
   else {
     if (estimates.length) lines.push(`- Estimación guardada para **${estimates.length} de ${items.length}** ítems: **${estimates.reduce((total, item) => total + item.estimatedMinutes!, 0).toLocaleString('es-AR')} min**.`);
-    if (timed.length) lines.push(`- Cronómetro acumulado en estas listas${items.some(item => item.timerStartedAt !== null) ? ' hasta el momento de exportar' : ''}: **${minutes(timed.reduce((total, item) => total + elapsed(item), 0))} min**.`);
+    if (timed.length) lines.push(`- Cronómetro acumulado en estas listas${items.some(stillRunning) ? ' hasta el momento de exportar' : ''}: **${minutes(timed.reduce((total, item) => total + elapsed(item), 0))} min**.`);
     lines.push('');
     for (const date of dates) {
       const dayItems = items.filter(item => item.date === date);
@@ -40,7 +45,7 @@ export function workChecklistReport(raw: unknown, dates: string[], exportedAt: n
         for (const item of dayItems.filter(entry => entry.blockId === block)) {
           const details = [item.estimatedMinutes === null ? 'Sin estimación' : `Estimación: ${item.estimatedMinutes.toLocaleString('es-AR')} min`];
           const seconds = elapsed(item);
-          details.push(seconds > 0 || item.timerStartedAt !== null ? `Cronómetro: ${minutes(seconds)} min${item.timerStartedAt !== null ? ' · en marcha al exportar' : ''}` : 'Sin tiempo acumulado');
+          details.push(seconds > 0 || item.timerStartedAt !== null ? `Cronómetro: ${minutes(seconds)} min${stillRunning(item) ? ' · en marcha al exportar' : item.timerStartedAt !== null ? ' · sin cierre registrado; limitado al final del día' : ''}` : 'Sin tiempo acumulado');
           lines.push(`- [${item.done ? 'x' : ' '}] ${inline(item.title)} · ${details.join(' · ')}.`);
         }
         lines.push('');

@@ -146,7 +146,9 @@ export function createTrainingSession(options: {id:string;date:string;week:Train
   };
 }
 export function getTrainingElapsed(session: TrainingSession, now=Date.now()): number {
-  return Math.max(0,Math.floor(session.elapsedSeconds+(session.status==='active'&&session.activeStartedAt!==null?(now-session.activeStartedAt)/1000:0)));
+  const endOfDay=new Date(`${session.date}T00:00:00`);endOfDay.setDate(endOfDay.getDate()+1);
+  const effectiveNow=Number.isFinite(endOfDay.getTime())?Math.min(now,endOfDay.getTime()):now;
+  return Math.max(0,Math.floor(session.elapsedSeconds+(session.status==='active'&&session.activeStartedAt!==null?Math.max(0,effectiveNow-session.activeStartedAt)/1000:0)));
 }
 export function getRestRemaining(session: TrainingSession, now=Date.now()): number {
   return session.status==='paused'||session.restUntil===null?session.pausedRestSeconds??0:Math.max(0,Math.ceil((session.restUntil-now)/1000));

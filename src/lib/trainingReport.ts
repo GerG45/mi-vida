@@ -26,13 +26,15 @@ export function trainingReport(raw:unknown,dates:string[],exportedAt:number,inli
   for(const session of sessions){
     const summary=getTrainingSummary(session);
     const imported=session.status==='imported';
+    const dayEnd=new Date(`${session.date}T00:00:00`);dayEnd.setDate(dayEnd.getDate()+1);
+    const dayClosed=Number.isFinite(exportedAt)&&exportedAt>=dayEnd.getTime();
     lines.push(`### ${session.date} · ${inline(session.title)} · Semana ${session.week}`, '',
-      `**Estado:** ${statusLabel[session.status]}.`);
+      `**Estado:** ${dayClosed&&(session.status==='active'||session.status==='paused')?'Sin cierre registrado · día cerrado':statusLabel[session.status]}.`);
     if(imported){
       lines.push('Registro del gym anterior: conserva las cargas y estados originales. No tenía repeticiones reales ni duración de sesión; no se incluye en los totales de series realizadas.','');
     }else{
       const elapsed=getTrainingElapsed(session,Number.isFinite(exportedAt)?exportedAt:session.startedAt);
-      lines.push(`- Cronómetro guardado${session.status==='active'?' al exportar':''}: **${number(elapsed/60)} min**.`,
+      lines.push(`- Cronómetro guardado${session.status==='active'?(dayClosed?' hasta el final de su fecha':' al exportar'):''}: **${number(elapsed/60)} min**.`,
         `- Series efectivas: **${summary.completedSets}** registradas / ${summary.targetSets} preparadas en la sesión. Aproximaciones: **${summary.warmupSets}** registradas.`,
         `- Ejercicios marcados hechos: **${summary.completedExercises}/${summary.totalExercises}**.`,
         `- RPE promedio registrado: **${summary.averageRpe===null?'Sin registrar':number(summary.averageRpe)+'/10'}**. Molestia promedio registrada: **${summary.averageDiscomfort===null?'Sin registrar':number(summary.averageDiscomfort)+'/10'}**.`,'');

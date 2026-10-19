@@ -23,6 +23,8 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 
 La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS breves. La preferencia del sistema de reducir movimiento desactiva las animaciones y transiciones. Los cambios visuales conservan las herramientas y los datos existentes.
 
+El calendario permite explorar cualquier fecha. Hoy habilita checks, diario, series y cronómetros. En días futuros se pueden preparar compromisos y listas de trabajo, pero no registrar actividad; los días pasados quedan en modo de consulta, con sus datos y reportes disponibles. El bloqueo se comprueba también al guardar y se actualiza al cambiar el día. Los cronómetros abiertos dejan de acumular tiempo al terminar su fecha, sin reescribir el registro original. Los ajustes, las definiciones globales y la recuperación explícita de respaldos se conservan.
+
 ## Usar en otro dispositivo
 
 Abrí la misma dirección y entrá con la misma cuenta Google en Ajustes. El estado debe indicar **Sincronizado con tu cuenta**. Si no iniciaste sesión, los cambios pertenecen solamente a ese navegador.

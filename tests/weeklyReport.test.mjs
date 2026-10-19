@@ -177,14 +177,15 @@ test('reporte incluye series reales, aproximaciones y carga anterior de la misma
 });
 
 test('reporte distingue borradores, parciales y antiguos importados sin inventar hechos',()=>{
-  const draft=training.createTrainingSession({id:'draft',date:'2026-10-13',week:1,day:2,now:10000});
+  const draft=training.createTrainingSession({id:'draft',date:'2026-10-13',week:1,day:2,now:Date.parse('2026-10-13T23:59:30')});
   draft.exercises[0].sets[1].loadKg=40;
   const partial={...loggedGym('partial','2026-10-14',15,200000),status:'abandoned'};
   const imported={...training.createTrainingSession({id:'old',date:'2026-10-15',week:1,day:3,now:400000}),status:'imported',activeStartedAt:null};
   imported.exercises[0].sets[1].loadKg=60;
   const report=buildWeeklyReport(backup({gymSessions:{draft,partial,old:imported}}),'2026-10-18');
   assert.equal(report.trainingSessions,1);
-  assert.match(report.markdown,/Estado:\*\* En curso/);
+  assert.match(report.markdown,/Estado:\*\* Sin cierre registrado · día cerrado/);
+  assert.match(report.markdown,/Cronómetro guardado hasta el final de su fecha: \*\*0,5 min\*\*/);
   assert.match(report.markdown,/Estado:\*\* Cerrada parcial/);
   assert.match(report.markdown,/Estado:\*\* Historial importado/);
   assert.match(report.markdown,/repeticiones y segundos sin registro/);
@@ -226,10 +227,10 @@ test('work checklists use assigned dates, preserve current checks and never turn
 });
 
 test('work report separates an optional stopwatch, captures running time at export and omits location links and raw block IDs', () => {
-  const report = buildWeeklyReport(backup({ workItems: {
-    stopped: workItem('stopped', '2026-10-13', { blockId: 'cordoba-work', title: 'Enviar https://share.google/ubicacion-privada', elapsedSeconds: 90 }),
-    running: workItem('running', '2026-10-13', { blockId: 'private-address-123', title: 'Revisar plan', timerStartedAt: Date.parse('2026-10-19T01:18:00.000Z'), elapsedSeconds: 30 }),
-  } }), '2026-10-18', { includeTasks: false });
+  const report = buildWeeklyReport({ ...backup({ workItems: {
+    stopped: workItem('stopped', '2026-10-18', { blockId: 'cordoba-work', title: 'Enviar https://share.google/ubicacion-privada', elapsedSeconds: 90 }),
+    running: workItem('running', '2026-10-18', { blockId: 'private-address-123', title: 'Revisar plan', timerStartedAt: Date.parse('2026-10-18T22:18:00'), elapsedSeconds: 30 }),
+  } }), exportedAt: new Date('2026-10-18T22:20:00').toISOString() }, '2026-10-18', { includeTasks: false });
   assert.equal(report.workItems, 2);
   assert.equal(report.workItemMarks, 0);
   const work = report.markdown.split('## Trabajo / proyectos · listas guardadas por fecha')[1].split('## Entrenamiento')[0];
@@ -239,6 +240,16 @@ test('work report separates an optional stopwatch, captures running time at expo
   assert.match(work, /incluidas las distracciones/);
   assert.match(work, /enlace de ubicación omitido/);
   assert.doesNotMatch(work, /ubicacion-privada|private-address-123/);
+});
+
+test('a work stopwatch left open on a closed day stops at midnight in the report without rewriting the record', () => {
+  const running = workItem('running', '2026-10-17', { timerStartedAt: Date.parse('2026-10-17T23:59:30'), elapsedSeconds: 30 });
+  const original = structuredClone(running);
+  const report = buildWeeklyReport({ ...backup({ workItems: { running } }), exportedAt: new Date('2026-10-18T22:20:00').toISOString() }, '2026-10-18');
+  const work = report.markdown.split('## Trabajo / proyectos · listas guardadas por fecha')[1].split('## Entrenamiento')[0];
+  assert.match(work, /Cronómetro: 1 min · sin cierre registrado; limitado al final del día/);
+  assert.doesNotMatch(work, /en marcha al exportar|hasta el momento de exportar/);
+  assert.deepEqual(running, original);
 });
 
 test('old backups and malformed work records do not invent checklist data from agenda or GTD', () => {

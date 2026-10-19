@@ -11,6 +11,12 @@
 .work-checklist-intro { margin:24px 0 21px; }
 .work-checklist-intro h2 { margin:0 0 9px; font:400 clamp(25px,4vw,33px)/1.22 Georgia,'Palatino Linotype',serif; letter-spacing:-.7px; color:#1e4033; overflow-wrap:anywhere; }
 .work-checklist-intro p { font-size:13px; line-height:1.7; color:#778173; margin:0; }
+.work-checklist-date-lock { display:flex; align-items:flex-start; gap:9px; padding:13px 15px; margin:0 0 18px; border:1px solid #e0e4d5; border-radius:12px; background:#f2f3e9; color:#6d7b5e; font-size:12px; line-height:1.7; }
+.work-checklist-date-lock>span { font-size:17px; line-height:1.2; }
+.work-checklist button:disabled { cursor:not-allowed; }
+.work-checklist-check:disabled { opacity:.65; }
+.work-checklist-check:disabled:hover:before { border-color:#c2cbb8; }
+.work-checklist-timer-button:disabled,.work-checklist-timer-button:disabled:hover { background:#f1f1e9; color:#a0a590; }
 .work-checklist-summary { padding:17px 19px; margin-bottom:22px; background:linear-gradient(110deg,#eef2e7,#f6f5ec); border:1px solid #e9ecdf; border-radius:16px; }
 .work-checklist-progress-copy { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:#77846d; font-size:11px; }
 .work-checklist-progress-copy>strong { font-size:20px; font-weight:550; line-height:1; color:#375944; }

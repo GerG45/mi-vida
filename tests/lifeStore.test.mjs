@@ -10,12 +10,14 @@ const training = await import(trainingUrl);
 const workSource=ts.transpileModule(await fs.readFile(new URL('../src/lib/workChecklist.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const workUrl=`data:text/javascript;base64,${Buffer.from(workSource).toString('base64')}`;
 const work=await import(workUrl);
+const policySource=ts.transpileModule(await fs.readFile(new URL('../src/lib/datePolicy.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const policyUrl=`data:text/javascript;base64,${Buffer.from(policySource).toString('base64')}`;
 async function store() {
   const items = new Map();
   globalThis.localStorage = {getItem:key => items.get(key) ?? null,setItem:(key,value) => items.set(key,String(value)),removeItem:key => items.delete(key)};
   const source = await fs.readFile(new URL('../src/lib/lifeStore.ts',import.meta.url),'utf8');
   const {outputText} = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}});
-  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();').replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`).replace(/from ['"]\.\/workChecklist['"]/,`from '${workUrl}'`);
+  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();').replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`).replace(/from ['"]\.\/workChecklist['"]/,`from '${workUrl}'`).replace(/from ['"]\.\/datePolicy['"]/,`from '${policyUrl}'`);
   const api = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}#${++instance}`);
   return {...api,items};
 }
@@ -93,7 +95,8 @@ test('cuentas y espacio local están aislados, incluido logout',async () => {
   assert.equal(s.useLifeState('settings',settings)[0].childName,'Local');
 });
 
-test('snapshot combina remoto con cambios pendientes sin perder otra fecha',async () => {
+test('snapshot combina remoto con cambios pendientes sin perder otra fecha',async t => {
+  t.mock.method(Date,'now',()=>new Date(2026,9,18,12).getTime());
   const s = await store();
   s.useLifeState('done',{});s.setStoreScope('project:userA');
   const [,setDone] = s.useLifeState('done',{});
@@ -208,7 +211,8 @@ test('una sesión remota se hidrata aunque el módulo se registre después de co
   assert.deepEqual(s.useLifeState('gymSessions',{})[0].remote,session);
 });
 
-test('listas de trabajo sincronizan por ítem, conservan otras fechas y generan tombstone al quitar',async()=>{
+test('listas de trabajo sincronizan por ítem, conservan otras fechas y generan tombstone al quitar',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,19,12).getTime());
   const s=await store();s.useLifeState('workItems',{});s.setStoreScope('project:userA');
   const a=work.createWorkItem({id:'work-a',date:'2026-10-20',blockId:'flex-work-0',title:'Primer paso',now:10000});
   const b=work.createWorkItem({id:'work-b',date:'2026-10-23',blockId:'flex-work-0',title:'Para el viernes',estimatedMinutes:25,now:11000});
@@ -248,4 +252,85 @@ test('un checklist remoto se hidrata después de conectar y mantiene su temporiz
   assert.equal(work.getWorkItemElapsed(restored,50000),30);
   s.receiveCloudSnapshot([{section:'workItems',key:item.id,value:null,deleted:true,updatedAt:30000}]);
   assert.deepEqual(s.useLifeState('workItems',{})[0],{});
+});
+
+test('el almacén bloquea checks ajenos a hoy sin escribir ni encolar y acepta los de hoy',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,19,12).getTime());
+  const s=await store();s.useLifeState('done',{});s.setStoreScope('project:userA');
+  let notifications=0;s.bindCloudWriter(()=>notifications++);
+  const [,setDone]=s.useLifeState('done',{}), writes=s.items.size;
+  setDone({'2026-10-18:gym':true});
+  setDone({'2026-10-20:gym':true});
+  setDone(all=>{all['2026-10-18:gym']=true;return all;});
+  assert.deepEqual(s.useLifeState('done',{})[0],{});
+  assert.equal(s.items.size,writes);
+  assert.deepEqual(s.getPendingRecords(),[]);
+  assert.equal(notifications,0);
+  setDone({'2026-10-19:gym':true});
+  assert.deepEqual(s.useLifeState('done',{})[0],{'2026-10-19:gym':true});
+  assert.equal(s.getPendingRecords().length,1);
+  assert.equal(notifications,1);
+});
+
+test('una mutación mixta se rechaza entera y los cambios de fechas anteriores quedan intactos',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,19,12).getTime());
+  const s=await store();s.useLifeState('overrides',{});s.setStoreScope('project:userA');
+  s.restoreLifeBackup({version:1,sections:{overrides:{'2026-10-18':{skipPewen:true}}}});
+  s.acknowledgeRecords(s.getPendingRecords());
+  const [,setOverrides]=s.useLifeState('overrides',{}), original=s.getLifeBackup().sections.overrides;
+  setOverrides({'2026-10-18':{skipPewen:false},'2026-10-20':{skipPewen:true}});
+  assert.deepEqual(s.getLifeBackup().sections.overrides,original);
+  assert.deepEqual(s.getPendingRecords(),[]);
+  setOverrides(all=>({...all,'2026-10-20':{skipPewen:true}}));
+  assert.equal(s.getLifeBackup().sections.overrides['2026-10-20'].skipPewen,true);
+});
+
+test('un callback abierto ayer no puede guardar después de medianoche',async t=>{
+  let clock=new Date(2026,9,19,23,59,59).getTime();
+  t.mock.method(Date,'now',()=>clock);
+  const s=await store();const [,setJournal]=s.useLifeState('journal',{});
+  setJournal({'2026-10-19':{freeText:'Antes de dormir'}});
+  clock=new Date(2026,9,20,0,0,1).getTime();
+  setJournal(all=>({...all,'2026-10-19':{...all['2026-10-19'],freeText:'Callback atrasado'}}));
+  assert.equal(s.getLifeBackup().sections.journal['2026-10-19'].freeText,'Antes de dormir');
+  setJournal(all=>({...all,'2026-10-20':{freeText:'Nuevo día'}}));
+  assert.equal(s.getLifeBackup().sections.journal['2026-10-20'].freeText,'Nuevo día');
+});
+
+test('la planificación de trabajo futura se guarda pero sus checks, tiempos y registros pasados se rechazan',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,19,12).getTime());
+  const s=await store();const [,setItems]=s.useLifeState('workItems',{});
+  const future=work.createWorkItem({id:'future',date:'2026-10-20',blockId:'flex-work',title:'Planear',now:10000});
+  const old=work.createWorkItem({id:'old',date:'2026-10-18',blockId:'flex-work',title:'Anterior',now:10000});
+  s.restoreLifeBackup({version:1,sections:{workItems:{old}}});
+  setItems(all=>({...all,future}));
+  setItems(all=>({...all,future:{...all.future,title:'Plan mejor',estimatedMinutes:40,order:1}}));
+  assert.equal(s.getLifeBackup().sections.workItems.future.estimatedMinutes,40);
+  setItems(all=>({...all,future:work.toggleWorkItem(all.future,20000)}));
+  setItems(all=>({...all,future:work.startWorkItem(all.future,20000)}));
+  assert.equal(s.getLifeBackup().sections.workItems.future.done,false);
+  assert.equal(s.getLifeBackup().sections.workItems.future.timerStartedAt,null);
+  setItems(all=>({...all,old:{...all.old,title:'No guardar'}}));
+  assert.equal(s.getLifeBackup().sections.workItems.old.title,'Anterior');
+});
+
+test('un respaldo explícito y el snapshot remoto conservan históricos aunque las ediciones locales estén bloqueadas',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,19,12).getTime());
+  const s=await store();s.useLifeState('gymSessions',{});s.useLifeState('done',{});s.setStoreScope('project:userA');
+  const old=training.createTrainingSession({id:'old-gym',date:'2026-10-18',week:1,day:1,now:10000});
+  s.restoreLifeBackup({version:1,sections:{gymSessions:{[old.id]:old},done:{'2026-10-18:gym':true}}});
+  assert.equal(s.getPendingRecords().length,2,'restaurar una copia histórica sigue sincronizando sus registros');
+  s.acknowledgeRecords(s.getPendingRecords());
+  const [,setSessions]=s.useLifeState('gymSessions',{});
+  setSessions(all=>({...all,[old.id]:{...all[old.id],currentExercise:1}}));
+  assert.equal(s.getLifeBackup().sections.gymSessions[old.id].currentExercise,0);
+  assert.deepEqual(s.getPendingRecords(),[]);
+  s.receiveCloudSnapshot([{section:'gymSessions',key:old.id,value:{...old,currentExercise:2},deleted:false,updatedAt:20000},{section:'done',key:'2026-10-18:gym',value:true,deleted:false,updatedAt:20000}]);
+  assert.equal(s.getLifeBackup().sections.gymSessions[old.id].currentExercise,2,'otro dispositivo puede hidratar registros históricos legítimos');
+  const future=training.createTrainingSession({id:'future-gym',date:'2026-10-20',week:1,day:1,now:10000});
+  setSessions(all=>({...all,[future.id]:future}));
+  assert.equal(s.getLifeBackup().sections.gymSessions[future.id],undefined);
+  const today=training.createTrainingSession({id:'today-gym',date:'2026-10-19',week:1,day:1,now:10000});
+  setSessions(all=>({...all,[today.id]:today}));
+  assert.equal(s.getLifeBackup().sections.gymSessions[today.id].date,'2026-10-19');
 });

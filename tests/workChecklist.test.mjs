@@ -79,16 +79,27 @@ test('completing pauses a timer and reopening preserves time without restarting 
   assert(work.normalizeWorkItem(reopened));
 });
 
-test('starting another item pauses earlier timers across dates and blocks without changing their checks',() => {
+test('starting another item pauses timers in the same day while preserving other dates',() => {
   const first = work.startWorkItem(fresh({id:'first'}),now);
-  const second = fresh({id:'second',date:'2026-10-21',blockId:'flex-work-1'});
-  const before = {first,second};
+  const second = fresh({id:'second',blockId:'custom-work'});
+  const past=work.startWorkItem(fresh({id:'past',date:'2026-10-19'}),now);
+  const before = {first,second,past};
   const after = work.startWorkItemTimer(before,'second',now+45000);
   assert.equal(after.first.elapsedSeconds,45); assert.equal(after.first.timerStartedAt,null);
   assert.equal(after.second.timerStartedAt,now+45000); assert.equal(after.first.done,false);
   assert.equal(before.first.timerStartedAt,now);
+  assert.equal(after.past,past,'un contador de otra fecha queda sin modificar');
   assert.equal(work.startWorkItemTimer(after,'missing',now+50000),after);
   assert.equal(work.startWorkItemTimer(after,'second',now+50000),after);
+});
+
+test('a timer left open freezes at the end of its assigned calendar day without rewriting it',()=>{
+  const start=new Date(2026,9,19,23,59,30).getTime();
+  const item=work.startWorkItem(fresh({date:'2026-10-19',now:start}),start);
+  const snapshot=JSON.stringify(item);
+  assert.equal(work.getWorkItemElapsed(item,new Date(2026,9,20,0,2).getTime()),30);
+  assert.equal(work.getWorkItemElapsed(item,new Date(2026,9,21,12).getTime()),30);
+  assert.equal(JSON.stringify(item),snapshot);
 });
 
 test('strict records reject unsafe keys, invalid dates/times, mismatches and unknown fields',() => {

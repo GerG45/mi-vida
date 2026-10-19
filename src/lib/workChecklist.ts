@@ -81,8 +81,10 @@ export function getWorkItemsForBlock(items: WorkItems, date: string, blockId: st
 
 /** Absolute timestamps make a running timer survive a reload or a suspended mobile app. */
 export function getWorkItemElapsed(item: WorkItem, now = Date.now()): number {
-  const additional = item.timerStartedAt !== null && Number.isFinite(now)
-    ? Math.floor(Math.max(0,now-item.timerStartedAt)/1000) : 0;
+  const endOfDay=new Date(`${item.date}T00:00:00`);endOfDay.setDate(endOfDay.getDate()+1);
+  const effectiveNow=Number.isFinite(endOfDay.getTime())?Math.min(now,endOfDay.getTime()):now;
+  const additional = item.timerStartedAt !== null && Number.isFinite(effectiveNow)
+    ? Math.floor(Math.max(0,effectiveNow-item.timerStartedAt)/1000) : 0;
   return Math.min(MAX_SECONDS,item.elapsedSeconds+additional);
 }
 
@@ -102,14 +104,14 @@ export function toggleWorkItem(item: WorkItem, now = Date.now()): WorkItem {
   return {...pauseWorkItem(item,now),done:true,completedAt:Math.max(item.createdAt,now)};
 }
 
-/** Starting another item pauses running items, including those belonging to another day/block. */
+/** Switch timers within the same day without writing into another date's locked records. */
 export function startWorkItemTimer(items: WorkItems, id: string, now = Date.now()): WorkItems {
   const target = items[id];
   if (!target || target.done || !timestamp(now)) return items;
   let changed = false;
   const next: WorkItems = {};
   for (const [key,item] of Object.entries(items)) {
-    const updated = key === id ? startWorkItem(item,now) : pauseWorkItem(item,now);
+    const updated = key === id ? startWorkItem(item,now) : item.date===target.date?pauseWorkItem(item,now):item;
     next[key] = updated;
     if (updated !== item) changed = true;
   }

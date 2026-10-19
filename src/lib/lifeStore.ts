@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
 import { normalizeTrainingSession, normalizeTrainingRoutine } from './training';
 import { normalizeWorkItem } from './workChecklist';
+import { canMutateDateSection } from './datePolicy';
 
 export const LIFE_SECTIONS = ['settings','profile','overrides','extras','done','shopping','journal','habits','habitChecks','tasks','projects','review','gymSessions','gymRoutines','workItems'] as const;
 export type LifeSection = typeof LIFE_SECTIONS[number];
@@ -153,11 +154,19 @@ export function materializeSection(section: string, initial: unknown, records: L
   return Array.isArray(initial) ? Object.values(entries) : entries;
 }
 
-function updateSection<T>(section: string, action: SetStateAction<T>): void {
+function updateSection<T>(section: string, action: SetStateAction<T>, restoringBackup = false): void {
   const previous = values.get(section) as T;
-  const next = normalizeLifeSection(section,clone(typeof action === 'function' ? (action as (value:T) => T)(previous) : action),true);
-  const changes = diffSection(section, previous, next, revision = Math.max(revision + 1,Date.now()));
+  // A rejected updater must not mutate the live snapshot, even if it edits its argument in place.
+  const next = normalizeLifeSection(section,clone(typeof action === 'function' ? (action as (value:T) => T)(clone(previous)) : action),true);
+  const nextRevision = Math.max(revision + 1,Date.now());
+  const changes = diffSection(section, previous, next, nextRevision);
   if (!changes.length) return;
+  if (!restoringBackup) {
+    const before = sectionEntries(section, previous), after = sectionEntries(section, next);
+    const now = Date.now();
+    if (changes.some(change => !canMutateDateSection(section,change.key,before[change.key],after[change.key],now))) return;
+  }
+  revision = nextRevision;
   values.set(section, next);
   write(storageKey(section), next);
   if (activeScope) { changes.forEach(record => pending.set(recordId(section,record.key), record)); persistPending(); }
@@ -222,7 +231,7 @@ export function restoreLifeBackup(data: unknown): void {
   for (const [section,value] of validated) {
     ensure(section, Array.isArray(value) ? [] : {});
     const current = values.get(section);
-    updateSection(section,['settings','profile'].includes(section) && plain(current) && plain(value) ? {...current,...value} : value);
+    updateSection(section,['settings','profile'].includes(section) && plain(current) && plain(value) ? {...current,...value} : value,true);
   }
 }
 export function localDeviceRecords(): LifeRecord[] {
