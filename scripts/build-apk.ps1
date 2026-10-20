@@ -72,7 +72,7 @@ try {
         if (-not (Test-Path -LiteralPath $BuiltApk -PathType Leaf)) { throw "Gradle terminó sin generar el APK esperado." }
         $DeliveryDirectory = Join-Path $ProjectRoot "APK"
         New-Item -ItemType Directory -Path $DeliveryDirectory -Force | Out-Null
-        $DeliveryApk = Join-Path $DeliveryDirectory "Mi-Vida-0.6.2-debug.apk"
+        $DeliveryApk = Join-Path $DeliveryDirectory "Mi-Vida-0.6.3-debug.apk"
         Copy-Item -LiteralPath $BuiltApk -Destination $DeliveryApk -Force
         Write-Host "APK generado: $DeliveryApk"
     } finally {

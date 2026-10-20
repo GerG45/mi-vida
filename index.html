@@ -1,1 +1,62 @@
-<!doctype html><html lang="es-AR"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><meta name="theme-color" content="#284638"/><meta name="description" content="Tu guía diaria: familia, trabajo, entrenamiento y tiempo para vos."/><link rel="icon" type="image/png" sizes="32x32" href="./favicon-mi-vida-32.png"/><link rel="icon" type="image/svg+xml" sizes="any" href="./favicon-mi-vida.svg"/><link rel="apple-touch-icon" href="/apple-touch-icon.png"/><link rel="manifest" href="/manifest.webmanifest"/><title>Mi Vida. · Un día a la vez</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#284638" />
+    <meta name="description" content="Tu guía diaria: familia, trabajo, entrenamiento y tiempo para vos." />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-mi-vida-32.png" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./favicon-mi-vida.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Mi Vida. · Un día a la vez</title>
+    <style>
+      html { background: #f3f1ea; }
+      .launch-curtain { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom)); box-sizing: border-box; overflow: hidden; background: #f3f1ea; color: #284638; opacity: 1; outline: none; }
+      .launch-curtain[hidden] { display: none; }
+      .launch-curtain__content { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; animation: launch-arrive 280ms ease-out both; }
+      .launch-curtain__halo { position: absolute; width: 260px; height: 260px; top: -70px; border: 1px solid #9caf842b; border-radius: 50%; pointer-events: none; }
+      .launch-curtain__halo::after { content: ''; position: absolute; inset: 20px; border: 1px solid #9caf841c; border-radius: inherit; }
+      .launch-curtain__sprout { position: relative; width: 116px; height: 116px; margin-bottom: 25px; }
+      .launch-curtain__logo { position: relative; width: min(246px, 68vw); height: auto; }
+      .launch-curtain__caption { font: 500 10px/1.8 'Segoe UI', Arial, sans-serif; letter-spacing: 3px; margin: 19px 0 0; color: #607057; }
+      .launch-curtain__line { width: 34px; height: 2px; border-radius: 2px; background: #9caf84; margin-top: 26px; }
+      .launch-curtain__enter { position: absolute; bottom: max(34px, calc(env(safe-area-inset-bottom) + 22px)); min-height: 44px; padding: 10px 19px; border: 1px solid #a8b79766; border-radius: 999px; background: #fffefa88; color: #36543e; font: 500 12px 'Segoe UI', Arial, sans-serif; cursor: pointer; }
+      .launch-curtain__enter:disabled { opacity: .45; cursor: default; }
+      .launch-curtain__enter:focus-visible { outline: 2px solid #6f8759; outline-offset: 4px; }
+      .launch-curtain[data-phase="leaving"] { opacity: 0; transform: translateY(-6px); transition: opacity 240ms ease-out, transform 240ms ease-out; pointer-events: none; }
+      .launch-retry { max-width: 380px; margin: 20vh auto; padding: 28px; color: #284638; font: 16px/1.7 'Segoe UI', Arial, sans-serif; }
+      .launch-retry a { color: inherit; }
+      @keyframes launch-arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+      @media (prefers-reduced-motion: reduce) { .launch-curtain, .launch-curtain__content { animation: none !important; transition: none !important; transform: none !important; } }
+    </style>
+  </head>
+  <body>
+    <div id="launch-curtain" class="launch-curtain" role="dialog" aria-modal="true" aria-label="Bienvenida a Mi Vida" tabindex="-1">
+      <div class="launch-curtain__content">
+        <span class="launch-curtain__halo" aria-hidden="true"></span>
+        <img class="launch-curtain__sprout" src="./favicon-mi-vida.svg" alt="" width="116" height="116" />
+        <img class="launch-curtain__logo" src="./brand/mi-vida-logo-light.svg" alt="Mi Vida." width="246" height="70" />
+        <p class="launch-curtain__caption">UN DÍA A LA VEZ</p>
+        <span class="launch-curtain__line" aria-hidden="true"></span>
+      </div>
+      <button id="launch-enter" class="launch-curtain__enter" type="button" disabled>Entrar ahora <span aria-hidden="true">→</span></button>
+    </div>
+    <p id="launch-retry" class="launch-retry" role="status" hidden>Mi Vida está tardando en abrir. Revisá tu conexión y <a href="">volvé a cargar la página</a>.</p>
+    <div id="root" inert aria-hidden="true"></div>
+    <noscript><style>.launch-curtain { display: none; }</style><p class="launch-retry">Activá JavaScript para abrir Mi Vida.</p></noscript>
+    <script>
+      // A failed bundle must never leave an unresponsive welcome screen in front.
+      window.setTimeout(function () {
+        var curtain = document.getElementById('launch-curtain');
+        if (!curtain || curtain.dataset.ready === 'true') return;
+        document.dispatchEvent(new Event('mi-vida:welcome-failed'));
+        curtain.hidden = true;
+        document.getElementById('root').removeAttribute('inert');
+        document.getElementById('root').removeAttribute('aria-hidden');
+        document.getElementById('launch-retry').hidden = false;
+      }, 8000);
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

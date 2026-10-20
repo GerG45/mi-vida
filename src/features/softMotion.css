@@ -1,0 +1,114 @@
+:root {
+  --soft-motion-ease: cubic-bezier(.2, .65, .3, 1);
+  --soft-motion-press: 180ms;
+  --soft-motion-reveal: 280ms;
+}
+
+/* Programmatic page announcement; interactive controls retain their focus ring. */
+.page h1[tabindex="-1"]:focus { outline: none; }
+
+/* Scroll handles cards; existing view/day fades continue to introduce the page. */
+.soft-motion-root :is(
+  .focus-card, .wake-card, .timeline-card, .family-card, .food-card, .panel,
+  .journal-inspiration, .journal-book-quote, .habits-intro, .gtd-capture-card,
+  .gtd-review-summary, .calendar-day, .training-day-entry, .work-checklist-entry,
+  .daily-inspiration, .gym-welcome, .gym-preview-card, .gym-exercise-card,
+  .gym-chart-panel, .gym-history-list, .gym-weekly-stats, .gym-custom-intro,
+  .gym-builder, .gym-saved-routines
+) { animation: none; }
+
+.soft-motion-root .soft-scroll-enter {
+  animation: mi-vida-scroll-in var(--soft-motion-reveal) var(--soft-motion-ease) both;
+}
+.soft-motion-root.soft-welcome-enter {
+  animation: mi-vida-welcome-in var(--soft-motion-reveal) var(--soft-motion-ease) both;
+}
+@keyframes mi-vida-welcome-in {
+  from { opacity: .7; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes mi-vida-scroll-in {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.soft-motion-root .soft-scroll-enter:focus-within {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
+/* A quiet, consistent response for ordinary and feature-specific buttons. */
+.app-shell button:not(:disabled):not([aria-disabled="true"]) {
+  transition: background-color 200ms var(--soft-motion-ease),
+    border-color 200ms var(--soft-motion-ease), color 180ms var(--soft-motion-ease),
+    box-shadow 200ms var(--soft-motion-ease),
+    transform var(--soft-motion-press) var(--soft-motion-ease);
+}
+.app-shell button:not(:disabled):not([aria-disabled="true"]):active { transform: scale(.98); }
+.app-shell button:disabled:hover,
+.app-shell button[aria-disabled="true"]:hover { transform: none; }
+
+.training-entry-action > svg, .work-entry-cta > svg,
+.family-card .text-button > svg, .food-card .text-button > svg,
+.prep-schedule-panel .text-button > svg, .work-timeline-link > svg,
+.training-timeline-link > svg {
+  transition: transform 200ms var(--soft-motion-ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .training-day-entry:not(:disabled):hover .training-entry-action > svg,
+  .work-checklist-entry:not(:disabled):hover .work-entry-cta > svg,
+  .family-card .text-button:not(:disabled):hover > svg,
+  .food-card .text-button:not(:disabled):hover > svg,
+  .prep-schedule-panel .text-button:not(:disabled):hover > svg,
+  .work-timeline-link:not(:disabled):hover > svg,
+  .training-timeline-link:not(:disabled):hover > svg { transform: translateX(2px); }
+}
+
+/* Pastel surfaces stay soft while useful descriptions remain easy to read. */
+.event-copy p { color: #64735f; }
+.event-time small { color: #69785f; }
+.wake-card > p, .wake-card .previous-night-note { color: #667560; }
+.sleep-line small { color: #697860; }
+.family-card > p { color: #756681; }
+.family-card .card-label { color: #796987; }
+.food-card > small, .food-card .card-label { color: #7d6946; }
+.daily-inspiration > p { color: #6c7b60; }
+.daily-inspiration > small { color: #6f7d62; }
+
+@media (max-width: 650px) {
+  .mobile-nav button { color: #63745d; }
+  /* Keep a full sentence and its action apart on narrow screens. */
+  .training-day-entry { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 14px; row-gap: 10px; }
+  .training-entry-symbol { align-self: start; margin-top: 4px; }
+  .training-entry-copy { grid-column: 2; }
+  .training-entry-copy strong { overflow-wrap: anywhere; }
+  .training-entry-action { grid-column: 2; justify-self: start; margin-left: 0; min-height: 36px; }
+  .work-checklist-entry { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 12px; row-gap: 10px; }
+  .work-entry-icon { align-self: start; margin-top: 4px; }
+  .work-entry-copy { grid-column: 2; }
+  .work-entry-cta { grid-column: 2; justify-self: start; margin-left: 0; min-height: 32px; }
+  .event-copy p, .wake-card > p, .wake-card .previous-night-note,
+  .family-card > p, .food-card > p { font-size: 12px; line-height: 1.75; }
+  .sleep-line small { font-size: 10px; line-height: 1.5; }
+  .food-card > small, .family-card .card-label, .food-card .card-label { font-size: 10px; }
+  .mobile-nav button span { font-size: 10px; line-height: 1.25; }
+}
+@media (min-width: 400px) and (max-width: 650px) {
+  .mobile-nav button span { font-size: 11px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soft-motion-root .soft-scroll-enter, .soft-motion-root.soft-welcome-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .app-shell button, .training-entry-action > svg, .work-entry-cta > svg,
+  .family-card .text-button > svg, .food-card .text-button > svg,
+  .prep-schedule-panel .text-button > svg, .work-timeline-link > svg,
+  .training-timeline-link > svg { transition: none !important; }
+  .app-shell button:active, .training-entry-action > svg, .work-entry-cta > svg,
+  .family-card .text-button > svg, .food-card .text-button > svg,
+  .prep-schedule-panel .text-button > svg, .work-timeline-link > svg,
+  .training-timeline-link > svg { transform: none !important; }
+}

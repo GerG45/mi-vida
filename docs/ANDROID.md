@@ -4,13 +4,19 @@ La APK incluye la interfaz dentro de la app: no necesita abrir la página en Chr
 
 ## Primera vez en el teléfono
 
-1. Instalar `Mi-Vida-0.6.2-debug.apk` encima de la versión anterior y abrir Mi Vida.
+1. Instalar `Mi-Vida-0.6.3-debug.apk` encima de la versión anterior y abrir Mi Vida.
 2. En **Ajustes**, entrar con la misma cuenta Google. Esperar a que aparezcan los horarios personales y el estado de la nube.
 3. En **Alarmas**, permitir notificaciones y alarmas exactas. La pantalla completa es un permiso adicional; también se puede detener o posponer desde la notificación.
 4. Revisar el volumen de alarmas y tocar **Probar alarma en 30 segundos**. Bloquear la pantalla y comprobar sonido, Detener y Posponer antes de usar el despertador de la agenda.
 5. Activar el despertar calculado, los recordatorios elegidos o una alarma puntual. Revisar la próxima alarma y el estado confirmado por Android.
 
 En Xiaomi/POCO, revisar el inicio automático y las restricciones de batería de Mi Vida si la prueba no funciona con la pantalla bloqueada. La app muestra los permisos que Android permite consultar; no afirma conocer el estado de los ajustes específicos de HyperOS.
+
+## Bienvenida y movimiento de la versión 0.6.3
+
+La APK y la web comparten una bienvenida con el brote y el logo de Mi Vida. El presupuesto habitual es de 2,2 segundos desde que comienza a cargar la página, más una salida de 240 ms; una carga lenta no suma otros dos segundos. Android mantiene su splash de sistema automático, sin una pausa nativa añadida. «Entrar ahora» o Escape omiten la espera, y Ajustes → «Ver bienvenida» permite repetirla. Con movimiento reducido el contenido se habilita directamente al estar listo.
+
+Volver de Google, de los ajustes de Android o de segundo plano no vuelve a mostrar la bienvenida. Detener y posponer el despertador continúa en la actividad nativa, fuera del telón web. Las tarjetas, los controles, el contraste y los modales reciben las mismas mejoras visuales de la web. Se conservan la firma, los datos, el ícono y los sonidos. Ver [auditoría de interfaz](UI-AUDIT.md).
 
 ## Fechas protegidas de la versión 0.6.2
 

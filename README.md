@@ -23,6 +23,8 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 
 La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS breves. La preferencia del sistema de reducir movimiento desactiva las animaciones y transiciones. Los cambios visuales conservan las herramientas y los datos existentes.
 
+La versión 0.6.3 incorpora una bienvenida compartida por web y APK: brote, logo y una salida suave en aproximadamente 2,4 segundos desde el inicio de carga. Se puede omitir con «Entrar ahora» o Escape y repetir desde «Ver bienvenida» en Ajustes. Con movimiento reducido se abre directamente. Las tarjetas inferiores aparecen al descubrirlas con scroll; los botones habilitados responden con una presión leve. También mejora la lectura de ayudas, la navegación móvil y el foco de los modales. Ver [auditoría de interfaz](docs/UI-AUDIT.md).
+
 El calendario permite explorar cualquier fecha. Hoy habilita checks, diario, series y cronómetros. En días futuros se pueden preparar compromisos y listas de trabajo, pero no registrar actividad; los días pasados quedan en modo de consulta, con sus datos y reportes disponibles. El bloqueo se comprueba también al guardar y se actualiza al cambiar el día. Los cronómetros abiertos dejan de acumular tiempo al terminar su fecha, sin reescribir el registro original. Los ajustes, las definiciones globales y la recuperación explícita de respaldos se conservan.
 
 ## Usar en otro dispositivo
