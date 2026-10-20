@@ -3,6 +3,7 @@ import { addDays, buildDay, defaults, formatTime, type DayOverride, type ExtraEv
 import { getNightPlan } from './sleep';
 import { trainingReport } from './trainingReport';
 import { workChecklistReport } from './workChecklistReport';
+import type { CalendarEventOccurrence } from './calendarModel';
 
 export type ReportWeek = { start: string; end: string; dates: string[] };
 export type WeeklyReportOptions = {
@@ -126,9 +127,14 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
   const settings = { ...defaults, ...object(sections.settings), workLocation: 'lugar de trabajo', rehearsalPlace: 'lugar del ensayo', homeMapsUrl: '', gymMapsUrl: '', workMapsUrl: '', mondayRehearsalMapsUrl: '' } as Settings;
   const overrides = object(sections.overrides) as Record<string, DayOverride>;
   const extras = Array.isArray(sections.extras) ? sections.extras as ExtraEvent[] : [];
+  const calendarPreferences = object(object(sections.calendarPreferences).main);
+  const calendarSources = Array.isArray(calendarPreferences.sourceCalendarIds) ? calendarPreferences.sourceCalendarIds : [];
+  const exportDate = Number.isNaN(created.getTime()) ? week.end : new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(created);
+  const calendarEvents = (Object.values(object(sections.calendarEvents)) as CalendarEventOccurrence[]).filter(event=>event && (event.date<exportDate || (calendarSources.includes(event.calendarId)&&event.calendarId!==calendarPreferences.destinationId)));
+  if (calendarEvents.length) lines.push('Google Calendar se reconstruye con la última copia consultada de cada fecha. Sus compromisos son referencias externas, sin marcas de realización. No incluye credenciales de Google.', '');
   for (const day of week.dates) {
-    const plan = buildDay(day, settings, overrides, extras);
-    const night = getNightPlan(day, settings, overrides, extras);
+    const plan = buildDay(day, settings, overrides, extras, calendarEvents);
+    const night = getNightPlan(day, settings, overrides, extras, calendarEvents);
     lines.push(`### ${label(day)} · Semana ${plan.week}`, '');
     lines.push(`- Despertar propuesto: **${formatTime(plan.wakeTime)}**.`, `- Acostarse propuesto para la noche anterior: **${formatTime(plan.bedtimePrevious)}**.`);
     if (night.enabled) lines.push(`- Acostarse para el próximo día: **${night.bedtimeDate} a las ${formatTime(night.bedtime)}** (propuesto para ${night.sleepHours} h de sueño).`, `- Despertar propuesto del día siguiente (${night.wakeDate}): **${formatTime(night.wakeTime)}**.`);
@@ -136,9 +142,9 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
     if (!plan.events.length) lines.push('No hay agenda activada para reconstruir.', '');
     else {
       for (const event of plan.events) {
-        const state = done[`${day}:${event.id}`] === true ? 'Marcado hecho' : ['family', 'sleep'].includes(event.kind) ? 'Referencia del plan' : 'Sin marca';
+        const state = event.source === 'google' ? 'Referencia de Google Calendar' : done[`${day}:${event.id}`] === true ? 'Marcado hecho' : ['family', 'sleep'].includes(event.kind) ? 'Referencia del plan' : 'Sin marca';
         const flags = [event.tentative && 'estimado', event.conflict && 'cruce de horario'].filter(Boolean);
-        lines.push(`- **${formatTime(event.start)}–${formatTime(event.end)} · ${inline(event.title)}** — ${state}${flags.length ? ` · ${flags.join(' · ')}` : ''}.`);
+        lines.push(`- **${event.allDay ? 'Todo el día' : `${formatTime(event.start)}–${formatTime(event.end)}`} · ${inline(event.title)}** — ${state}${flags.length ? ` · ${flags.join(' · ')}` : ''}.`);
         if (options.includePlanDetails && event.detail) lines.push(`  ${inline(event.detail)}`);
       }
       lines.push('');

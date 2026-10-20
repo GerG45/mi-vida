@@ -20,6 +20,8 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 - Excepción por fecha para un lunes sin trabajo: entrenamiento por la mañana, ida en colectivo al ensayo y regreso habitual; miércoles y viernes se mantienen.
 - Creatina junto al desayuno como recordatorio personal, opciones con licuadora/minipimer y enlaces privados a tus lugares.
 - Copia local, respaldo JSON y calendario ICS. Sincronización privada por cuenta con Firebase.
+- Conexión opcional con Google Calendar: consultar compromisos y publicar bloques en un calendario separado, con revisión previa. Ver [activación y límites](docs/GOOGLE-CALENDAR.md).
+- Compras de súper en una sección independiente: productos, cantidades, categorías y checks, guardados por cuenta sin depender de la fecha explorada ni del meal prep.
 
 La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS breves. La preferencia del sistema de reducir movimiento desactiva las animaciones y transiciones. Los cambios visuales conservan las herramientas y los datos existentes.
 

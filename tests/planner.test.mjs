@@ -214,6 +214,55 @@ test('saltar Pewen solo se aplica el lunes y con un booleano verdadero', () => {
   assert.equal(withoutRehearsal.events.find(e => e.id === 'gym').start,495);
 });
 
+test('martes entrena 08:30–09:45 con viajes y ducha completos antes de cocinar 10:30',()=>{
+  const config=settings({gymDays:[2,3,4,5,6],mealPrepTuesdayStart:'10:30',mealPrepFridayStart:'10:30'});
+  for(const date of ['2026-10-13','2026-10-20']) {
+    const day=buildDay(date,config);
+    assert.equal(day.wakeTime,465,'07:45 permite desayuno y preparación de20min con10min de margen');
+    assert.deepEqual(day.events.filter(event=>event.id.startsWith('gym')).map(event=>[event.id,event.start,event.end]),[
+      ['gym-out',495,510],['gym',510,585],['gym-back',585,600],['gym-shower',600,615],
+    ]);
+    const cooking=day.events.find(event=>event.id==='meal-prep');
+    assert.equal(cooking.start,630);assert.equal(cooking.end,720);
+    assert.equal(day.events.find(event=>event.id==='pickup-out').start,750);
+    for(const gym of day.events.filter(event=>event.id.startsWith('gym'))) {
+      assert.equal(gym.conflict,undefined);
+      for(const fixed of day.events.filter(event=>event.fixed)) assert.equal(intersects(gym,fixed),false,`${date}: ${fixed.title}`);
+    }
+    assert(!day.warnings.some(message=>message.includes('Entrenamiento del martes')));
+  }
+});
+
+test('martes busca el hueco más cercano cuando Google cruza 08:30 y conserva cocina fija',()=>{
+  const config=settings({gymDays:[2],mealPrepTuesdayStart:'10:30',mealPrepFridayStart:'10:30'});
+  const date='2026-10-20';
+  const google={id:'busy-morning',calendarId:'source@example.test',eventId:'appointment',title:'Turno temprano',date,startMin:480,endMin:600,allDay:false,busy:true,updatedAt:1};
+  const day=buildDay(date,config,{[date]:{care:'other',dropoff:'other',pickup:'other'}},[],[google]);
+  const gym=day.events.find(event=>event.id==='gym');
+  assert(gym,'puede encontrar otro hueco completo con cobertura familiar');
+  assert.notEqual(gym.start,510);
+  assert.equal(gym.end-gym.start,config.gymDurationMin);
+  assert.equal(day.events.find(event=>event.id==='meal-prep').start,630);
+  assert.equal(day.events.filter(event=>event.id.startsWith('gym')).reduce((total,event)=>total+event.end-event.start,0),120);
+  for(const event of day.events.filter(event=>event.id.startsWith('gym'))) {
+    assert.equal(event.conflict,undefined);
+    for(const fixed of day.events.filter(event=>event.fixed)) assert.equal(intersects(event,fixed),false,event.id);
+  }
+  assert(day.warnings.some(message=>message.includes('Entrenamiento del martes: las 08:30 no son posibles')&&message.includes(formatTime(gym.start))));
+});
+
+test('martes no invade cuidado ni acorta la sesión si la mañana no alcanza y no anticipa días desactivados',()=>{
+  const date='2026-10-20';
+  const config=settings({gymDays:[2],mealPrepTuesdayStart:'10:30'});
+  const busy={id:'busy-morning',calendarId:'source@example.test',eventId:'appointment',title:'Compromiso de mañana',date,startMin:480,endMin:630,allDay:false,busy:true,updatedAt:1};
+  const closed=buildDay(date,config,{},[],[busy]);
+  assert.equal(closed.events.some(event=>event.id.startsWith('gym')),false);
+  assert(closed.warnings.some(message=>message.includes('Entrenamiento: no hay un hueco real de 120 min')));
+  const noGym=buildDay(date,{...config,gymDays:[]});
+  assert.equal(noGym.wakeTime,480);
+  assert.equal(noGym.events.some(event=>event.id.startsWith('gym')),false);
+});
+
 test('creatina acompaña el mismo desayuno cada mañana, sin añadir tiempos ni una dosis', () => {
   for (const breakfastInPreparation of [true,false]) {
     for (let n=0;n<14;n++) {

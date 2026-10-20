@@ -1,3 +1,5 @@
+import type { CalendarEventOccurrence } from './calendarModel';
+
 export type Settings = {
   childName: string;
   workLocation: string;
@@ -92,6 +94,11 @@ export type PlanEvent = {
   fixed: boolean;
   tentative: boolean;
   conflict?: boolean;
+  /** Imported commitments are managed in their source calendar, never checked off locally. */
+  source?: 'google';
+  allDay?: boolean;
+  /** Informative all-day/transparent imports remain visible without consuming a free slot. */
+  busy?: boolean;
 };
 
 export type DayPlan = {
@@ -168,6 +175,7 @@ export const defaults: Settings = {
 };
 
 type Range = { start: number; end: number };
+const blocksTime = (event: PlanEvent): boolean => event.source !== 'google' || (event.busy !== false && event.allDay !== true);
 const MINUTE_DAY = 1440;
 const FALLBACK_DATE = '2026-10-19';
 
@@ -288,16 +296,33 @@ function findSlot(duration: number, start: number, end: number, preferred: numbe
   return candidates[0];
 }
 
-export function buildDay(dateISO: string, input: Settings, overrides: Record<string, DayOverride> = {}, extras: ExtraEvent[] = []): DayPlan {
+/** Imported snapshots never become local extras; identities survive remote title/time changes. */
+export function getCalendarBusyEvents(occurrences: Record<string,CalendarEventOccurrence> | CalendarEventOccurrence[], date: string): PlanEvent[] {
+  if (!validDate(date) || !occurrences || typeof occurrences !== 'object') return [];
+  const seen = new Set<string>();
+  return Object.values(occurrences).flatMap(occurrence => {
+    if (!occurrence || typeof occurrence !== 'object' || occurrence.date !== date || typeof occurrence.id !== 'string' || !occurrence.id || occurrence.id.length > 500
+      || typeof occurrence.title !== 'string' || !occurrence.title.trim() || occurrence.title.length > 300 || typeof occurrence.allDay !== 'boolean' || typeof occurrence.busy !== 'boolean'
+      || !Number.isInteger(occurrence.startMin) || !Number.isInteger(occurrence.endMin) || occurrence.startMin < 0 || occurrence.endMin > MINUTE_DAY || occurrence.endMin <= occurrence.startMin
+      || (occurrence.allDay && (occurrence.startMin !== 0 || occurrence.endMin !== MINUTE_DAY)) || seen.has(occurrence.id)) return [];
+    seen.add(occurrence.id);
+    const busy = occurrence.busy && !occurrence.allDay;
+    return [{id:`google-${occurrence.id}`,title:occurrence.title,start:occurrence.startMin,end:occurrence.endMin,kind:'personal' as const,
+      detail:occurrence.allDay ? 'Google Calendar · Todo el día. Informativo; no bloquea horarios.' : busy ? 'Compromiso de Google Calendar. Se modifica desde su calendario de origen.' : 'Google Calendar · Disponible. No bloquea horarios.',
+      fixed:true,tentative:false,source:'google' as const,allDay:occurrence.allDay,busy}];
+  }).sort((a,b) => a.start-b.start || a.id.localeCompare(b.id));
+}
+
+export function buildDay(dateISO: string, input: Settings, overrides: Record<string, DayOverride> = {}, extras: ExtraEvent[] = [], externalOccurrences: CalendarEventOccurrence[] = []): DayPlan {
   const s = normalize(input);
   const date = validDate(dateISO) ? dateISO : FALLBACK_DATE;
   const personalize = (text: string) => text.replaceAll('[PEQUE]', () => s.childName || 'tu peque').replaceAll('[DESTINO]', () => s.workLocation || 'tu destino').replaceAll('[ENSAYO]', () => s.rehearsalName || 'Ensayo').replaceAll('[LUGAR]', () => s.rehearsalPlace || 'Lugar a confirmar');
   const weekday = localDate(date).getDay();
-  if (!s.scheduleEnabled) return {date, week: weekForDate(date,s.anchorMonday),wakeTime: time(s.defaultWake,defaults.defaultWake),bedtimePrevious: ((time(s.defaultWake,defaults.defaultWake)-s.sleepHours*60)%1440+1440)%1440,events:[],warnings:[],pending:['Importá tus horarios o activá tu agenda en Ajustes. Los datos de ejemplo todavía no están en uso.'],care:'Completá tu organización familiar para empezar.'};
+  if (!s.scheduleEnabled) return {date, week: weekForDate(date,s.anchorMonday),wakeTime: time(s.defaultWake,defaults.defaultWake),bedtimePrevious: ((time(s.defaultWake,defaults.defaultWake)-s.sleepHours*60)%1440+1440)%1440,events:getCalendarBusyEvents(externalOccurrences,date),warnings:[],pending:['Importá tus horarios o activá tu agenda en Ajustes. Los datos de ejemplo todavía no están en uso.'],care:'Completá tu organización familiar para empezar.'};
   const week = weekForDate(date, s.anchorMonday);
   const override = (overrides && typeof overrides === 'object' && overrides[date]) || {};
   const skipPewen = weekday === 1 && override.skipPewen === true;
-  const events: PlanEvent[] = [];
+  const events: PlanEvent[] = getCalendarBusyEvents(externalOccurrences,date);
   const warnings: string[] = [];
   const pending: string[] = [];
   const careWindows: Range[] = [];
@@ -467,11 +492,14 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   }
 
   // Family ranges do not force a midnight wake-up. Fixed journeys and commitments do.
-  const earliestFixed = events.filter(e => e.fixed && e.kind !== 'family' && !e.id.startsWith('care-')).reduce((earliest, event) => Math.min(earliest, event.start), MINUTE_DAY);
-  // Reserve enough morning preparation for the preferred 08:15 workout on an
-  // office-free Monday. Actual school journeys still take precedence below.
+  const earliestFixed = events.filter(e => e.fixed && blocksTime(e) && e.kind !== 'family' && !e.id.startsWith('care-')).reduce((earliest, event) => Math.min(earliest, event.start), MINUTE_DAY);
+  // Prepare in time for 08:15 on an office-free Monday or 08:30 on Tuesday.
+  // Actual school journeys, imported commitments and care still take precedence.
   const preferredMondayDeparture = 8 * 60 + 15 - s.gymTravelMin;
-  const morningAnchor = skipPewen ? Math.min(earliestFixed, preferredMondayDeparture) : earliestFixed;
+  const preferredTuesdayDeparture = 8 * 60 + 30 - s.gymTravelMin;
+  const tuesdayTraining = weekday === 2 && s.gymDays.includes(2);
+  const preferredTrainingDeparture = skipPewen ? preferredMondayDeparture : tuesdayTraining ? preferredTuesdayDeparture : MINUTE_DAY;
+  const morningAnchor = Math.min(earliestFixed,preferredTrainingDeparture);
   const defaultWake = time(s.defaultWake, defaults.defaultWake);
   const breakfastDuration = s.breakfastInPreparation ? 0 : 20;
   const morningDuration = s.preparationMin + breakfastDuration;
@@ -483,7 +511,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   const sleepAvailable = wakeTime - preferredBedtime + (preferredBedtime >= 720 ? MINUTE_DAY : 0);
   if (sleepAvailable < s.sleepHours * 60) warnings.push(`Para dormir ${s.sleepHours} h y levantarte a las ${formatTime(wakeTime)}, acostate la noche anterior a las ${formatTime(bedtimePrevious)}. Tu hora habitual ${formatTime(preferredBedtime)} deja ${Math.max(0, Math.floor(sleepAvailable / 60))} h ${Math.max(0, Math.round(sleepAvailable % 60))} min.`);
 
-  const busy = (includeCare: boolean, includeAway = false): Range[] => [...events.filter(e => includeCare || !e.id.startsWith('care-')), ...(includeAway ? awayWindows : [])];
+  const busy = (includeCare: boolean, includeAway = false): Range[] => [...events.filter(e => blocksTime(e) && (includeCare || !e.id.startsWith('care-'))), ...(includeAway ? awayWindows : [])];
   const meal = (id: string, title: string, duration: number, from: number, to: number, preferred: number) => {
     const slot = findSlot(duration, Math.max(wakeTime, from), to, preferred, busy(false));
     if (slot === undefined) warnings.push(`${title}: no hay un hueco de ${duration} min en su franja. Hace falta mover un compromiso.`);
@@ -507,7 +535,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
 
   if (s.gymDays.includes(weekday) || skipPewen) {
     const duration = s.gymTravelMin * 2 + s.gymDurationMin + s.showerMin;
-    const preferred = skipPewen ? preferredMondayDeparture : 1020;
+    const preferred = skipPewen ? preferredMondayDeparture : tuesdayTraining ? preferredTuesdayDeparture : 1020;
     const slot = findSlot(duration, Math.max(wakeTime + 30, 420), 1290, preferred, busy(true, true));
     if (slot === undefined) warnings.push(`Entrenamiento: no hay un hueco real de ${duration} min fuera del cuidado de [PEQUE]. Elegí cobertura u otro día; no se superpuso con tus compromisos.`);
     else {
@@ -516,9 +544,10 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
         const schoolBlocks = events.some(e => (e.id.startsWith('school-') || e.id.startsWith('pickup-')) && overlaps(e,wanted));
         warnings.push(`Entrenamiento: las 08:15 no son posibles con ${schoolBlocks ? 'los viajes del jardín' : 'los compromisos y cuidados de hoy'}. Se ubicó a las ${formatTime(slot+s.gymTravelMin)}, con el traslado, la vuelta y la ducha completos.`);
       }
+      if (tuesdayTraining && slot !== preferred) warnings.push(`Entrenamiento del martes: las 08:30 no son posibles con los compromisos y cuidados de hoy. Se ubicó a las ${formatTime(slot+s.gymTravelMin)}, con la sesión, los traslados y la ducha completos.`);
       let cursor = slot;
       push('gym-out', 'Ir a entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de ida.`, false);
-      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.' : 'Bloque de entrenamiento. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.', false);
+      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.' : tuesdayTraining ? 'Martes: preferencia a las 08:30, antes de la tanda de cocina y respetando tus compromisos. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.' : 'Bloque de entrenamiento. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.', false);
       push('gym-back', 'Volver de entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de regreso.`, false);
       push('gym-shower', 'Ducha y cambio', cursor, cursor + s.showerMin, 'personal', `${s.showerMin} min después de entrenar.`, false);
     }
@@ -554,7 +583,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
     for (let j = i + 1; j < events.length; j++) {
       const a = events[i];
       const b = events[j];
-      if (!overlaps(a, b)) continue;
+      if (!blocksTime(a) || !blocksTime(b) || !overlaps(a, b)) continue;
       const careEvent = a.id.startsWith('care-') ? a : b.id.startsWith('care-') ? b : undefined;
       const other = careEvent === a ? b : a;
       if (careEvent) {
@@ -575,5 +604,5 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   }
 
   events.sort((a, b) => a.start - b.start || Number(a.id.startsWith('care-')) - Number(b.id.startsWith('care-')) || a.end - b.end);
-  return { date, week, wakeTime, bedtimePrevious, events: events.map(e => ({...e,title:personalize(e.title),detail:personalize(e.detail)})), warnings: [...new Set(warnings)].map(personalize), pending: [...new Set(pending)].map(personalize), care:personalize(care) };
+  return { date, week, wakeTime, bedtimePrevious, events: events.map(e => e.source === 'google' ? e : ({...e,title:personalize(e.title),detail:personalize(e.detail)})), warnings: [...new Set(warnings)].map(personalize), pending: [...new Set(pending)].map(personalize), care:personalize(care) };
 }

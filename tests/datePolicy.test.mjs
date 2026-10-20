@@ -8,6 +8,17 @@ const {localDateKey,getDateAccess,canMutateDateSection:canChange} = await import
 const now = new Date(2026,9,19,12).getTime();
 const futureItem = {id:'next',date:'2026-10-20',blockId:'flex-work',title:'Preparar',done:false,estimatedMinutes:null,createdAt:100,completedAt:null,order:0,elapsedSeconds:0,timerStartedAt:null};
 
+test('las copias y vínculos de Calendar conservan las fechas cerradas',()=>{
+  for (const section of ['calendarEvents','calendarLinks']) {
+    const past={date:'2026-10-18'},today={date:'2026-10-19'},future={date:'2026-10-20'};
+    assert.equal(canChange(section,'id',past,undefined,now),false);
+    assert.equal(canChange(section,'id',past,{...past,date:future.date},now),false);
+    assert.equal(canChange(section,'id',undefined,past,now),false);
+    assert.equal(canChange(section,'id',today,{...today,title:'Cambio'},now),true);
+    assert.equal(canChange(section,'id',undefined,future,now),true);
+  }
+});
+
 test('la política distingue consulta pasada, planificación futura y ejecución de hoy',()=>{
   assert.deepEqual(getDateAccess('2026-10-19',now),{date:'2026-10-19',today:'2026-10-19',kind:'today',canPlan:true,canExecute:true,readOnly:false});
   assert.equal(getDateAccess('2026-10-18',now).readOnly,true);

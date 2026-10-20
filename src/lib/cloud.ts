@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { initializeApp, deleteApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, type Auth, type User } from 'firebase/auth';
 import {isAndroidApp, LifeGoogleAuth} from './native';
-import { getFirestore, collection, doc, onSnapshot, writeBatch, serverTimestamp, terminate, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { getFirestore, collection, doc, onSnapshot, writeBatch, runTransaction, serverTimestamp, terminate, type Firestore, type Unsubscribe } from 'firebase/firestore';
 import { acknowledgeRecords, bindCloudWriter, decodeRecordId, getPendingRecords, getStorageError, getStoreScope, isLifeRecord, localDeviceRecords, queueLocalDeviceRecords, receiveCloudSnapshot, recordId, setStoreScope, type LifeRecord } from './lifeStore';
 
 export interface MiVidaFirebaseConfig extends FirebaseOptions { allowRegistration?: boolean; emailPassword?: boolean; googleSignIn?: boolean; allowedEmail?: string }
@@ -31,6 +31,46 @@ function publish(patch: Partial<CloudStatus>): void { status = {...status,...pat
 export function useCloudStatus(): CloudStatus { return useSyncExternalStore(fn => { watchers.add(fn);return () => { watchers.delete(fn); }; },() => status,() => status); }
 export function getCloudStatus(): CloudStatus { return status; }
 export function getFirebaseConfig(): MiVidaFirebaseConfig | null { return config ? {...config} : null; }
+
+/** A private per-account lease prevents PC and Android from creating two destination calendars. */
+export async function withCalendarDestination(resolve: (canonicalId: string) => Promise<string>): Promise<string> {
+  const currentDb=db,uid=auth?.currentUser?.uid,thisSession=session;
+  if (!currentDb || !uid || !status.initialSnapshot || !online()) throw new Error('Conectá Firebase para preparar el calendario compartido entre tus dispositivos.');
+  // This coordination record is intentionally outside LifeSection: no token or backup payload.
+  const reference=doc(currentDb,'users',uid,'miVidaRecords','calendarSetup~destination');
+  const leaseId=crypto.randomUUID();
+  const valid=()=>session===thisSession&&auth?.currentUser?.uid===uid&&db===currentDb;
+  const canonicalId=await runTransaction(currentDb,async transaction=>{
+    if(!valid())throw new Error('Cambió la cuenta de Mi Vida. Volvé a conectar Calendar.');
+    const snapshot=await transaction.get(reference),value=snapshot.data()?.value;
+    if(typeof value?.destinationId==='string'&&value.destinationId)return value.destinationId as string;
+    if(typeof value?.leaseUntil==='number'&&value.leaseUntil>Date.now())throw new Error('Otro dispositivo está preparando el calendario. Esperá un momento y volvé a publicar.');
+    transaction.set(reference,{value:{destinationId:'',leaseId,leaseUntil:Date.now()+120000},deleted:false,updatedAt:serverTimestamp()});
+    return '';
+  });
+  if(!valid())throw new Error('Cambió la cuenta de Mi Vida. Volvé a conectar Calendar.');
+  if(canonicalId) {
+    const resolved=await resolve(canonicalId);
+    if(!valid()||resolved!==canonicalId)throw new Error('El calendario de destino cambió. Revisá la conexión antes de publicar.');
+    return resolved;
+  }
+  try {
+    const destinationId=await resolve('');
+    if(!valid()||!destinationId)throw new Error('Cambió la conexión antes de guardar el calendario. Volvé a intentar.');
+    await runTransaction(currentDb,async transaction=>{
+      const snapshot=await transaction.get(reference),value=snapshot.data()?.value;
+      if(!valid()||value?.leaseId!==leaseId)throw new Error('Cambió la preparación del calendario. Actualizá Firebase y volvé a intentar.');
+      transaction.set(reference,{value:{destinationId,leaseId:'',leaseUntil:0},deleted:false,updatedAt:serverTimestamp()});
+    });
+    return destinationId;
+  } catch(error) {
+    if(valid())await runTransaction(currentDb,async transaction=>{
+      const snapshot=await transaction.get(reference),value=snapshot.data()?.value;
+      if(value?.leaseId===leaseId)transaction.set(reference,{value:{destinationId:'',leaseId:'',leaseUntil:0},deleted:false,updatedAt:serverTimestamp()});
+    }).catch(()=>{});
+    throw error;
+  }
+}
 
 function refresh(): void {
   const pendingCount = getPendingRecords().length;

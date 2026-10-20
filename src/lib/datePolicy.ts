@@ -38,6 +38,9 @@ const datedKey = (key: string): string => /^\d{4}-\d{2}-\d{2}:.+$/.test(key) ? k
  */
 export function canMutateDateSection(section: string, key: string, before: unknown, after: unknown, now: Date | number = Date.now()): boolean {
   const access = (date: unknown): DateAccess => getDateAccess(typeof date === 'string' ? date : '', now);
+  if (section === 'calendarEvents' || section === 'calendarLinks') {
+    return [before, after].every(value => value === undefined || (object(value) && access(value.date).canPlan));
+  }
   if (section === 'done' || section === 'habitChecks') return access(datedKey(key)).canExecute;
   if (section === 'journal') return access(key).canExecute;
   if (section === 'overrides') return access(key).canPlan;

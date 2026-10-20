@@ -2,8 +2,10 @@ import { useSyncExternalStore, type Dispatch, type SetStateAction } from 'react'
 import { normalizeTrainingSession, normalizeTrainingRoutine } from './training';
 import { normalizeWorkItem } from './workChecklist';
 import { canMutateDateSection } from './datePolicy';
+import { normalizeCalendarEventOccurrence, normalizeCalendarPreferences, normalizeCalendarExportLink } from './calendarModel';
+import { normalizeGroceryItem } from './groceryList';
 
-export const LIFE_SECTIONS = ['settings','profile','overrides','extras','done','shopping','journal','habits','habitChecks','tasks','projects','review','gymSessions','gymRoutines','workItems'] as const;
+export const LIFE_SECTIONS = ['settings','profile','overrides','extras','done','shopping','journal','habits','habitChecks','tasks','projects','review','gymSessions','gymRoutines','workItems','calendarPreferences','calendarEvents','calendarLinks','groceries'] as const;
 export type LifeSection = typeof LIFE_SECTIONS[number];
 export interface LifeRecord { section: string; key: string; value: unknown; deleted: boolean; updatedAt: number }
 export interface LifeBackup { version: 1; exportedAt: string; sections: Record<string, unknown> }
@@ -49,6 +51,10 @@ const taskTemplate = {notes:'',status:'inbox',context:'',minutes:15,energy:'medi
 const taskStatuses = ['inbox','next','waiting','someday','reference','done','trash'];
 function normalizedEntry(section: string, key: string, value: unknown): unknown {
   if (!safeKey(key)) throw new Error('Clave de entrada no válida.');
+  if (section === 'groceries') { const entry=normalizeGroceryItem(value,key);if(!entry)throw new Error('Producto de la lista de compras no válido.');return entry; }
+  if (section === 'calendarPreferences') { const entry = key === 'main' && normalizeCalendarPreferences(value);if(!entry)throw new Error('Preferencias de Calendar no válidas.');return entry; }
+  if (section === 'calendarEvents') { const entry = normalizeCalendarEventOccurrence(value,key);if(!entry)throw new Error('Compromiso de Calendar no válido.');return entry; }
+  if (section === 'calendarLinks') { const entry = normalizeCalendarExportLink(value,key);if(!entry)throw new Error('Vínculo de Calendar no válido.');return entry; }
   if (section === 'workItems') { const entry=normalizeWorkItem(value,key);if(!entry)throw new Error('Tarea del bloque de trabajo no válida.');return entry; }
   if (section === 'gymSessions') { const entry=normalizeTrainingSession(value,key);if(!entry)throw new Error('Sesión de entrenamiento no válida.');return entry; }
   if (section === 'gymRoutines') { const entry=normalizeTrainingRoutine(value,key);if(!entry)throw new Error('Rutina de entrenamiento no válida.');return entry; }

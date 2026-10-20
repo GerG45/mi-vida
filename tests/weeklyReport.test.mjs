@@ -32,6 +32,19 @@ const reportSource = ts.transpileModule(await fs.readFile(new URL('../src/lib/we
 const { getReportWeek, getDefaultReportWeek, buildWeeklyReport } = await import(`data:text/javascript;base64,${Buffer.from(reportSource).toString('base64')}`);
 const backup = (sections = {}) => ({ version: 1, exportedAt: '2026-10-19T01:20:00.000Z', sections });
 
+test('Calendar es referencia sin check y conserva el pasado al cambiar las fuentes elegidas',()=>{
+  const occurrence=(id,date,title,calendarId='elegido')=>({id,calendarId,eventId:id,title,date,startMin:540,endMin:600,allDay:false,busy:true,updatedAt:0});
+  const report=buildWeeklyReport(backup({settings:{...defaults,scheduleEnabled:true},calendarPreferences:{main:{sourceCalendarIds:['elegido'],destinationId:'destino'}},calendarEvents:{
+    old:occurrence('old','2026-10-17','Referencia histórica','desmarcado'),
+    current:occurrence('current','2026-10-18','Evento externo de hoy'),
+    stale:occurrence('stale','2026-10-18','Fuente desmarcada de hoy','desmarcado'),
+    loop:occurrence('loop','2026-10-18','Bloque propio duplicado','destino'),
+  },done:{'2026-10-18:google-current':true}}),'2026-10-18');
+  assert.match(report.markdown,/Referencia histórica/);
+  assert.match(report.markdown,/Evento externo de hoy\*\* — Referencia de Google Calendar/);
+  assert.doesNotMatch(report.markdown,/Fuente desmarcada de hoy|Bloque propio duplicado/);
+});
+
 test('Sunday closes its own week, Monday offers the preceding complete week', () => {
   assert.deepEqual(getDefaultReportWeek('2026-10-18'), {
     start: '2026-10-12', end: '2026-10-18',
@@ -140,7 +153,7 @@ test('night advice belongs to the following morning, including the Monday outsid
   assert.match(sunday, /Acostarse para el próximo día: \*\*2026-10-18 a las 22:45\*\*/);
   assert.match(sunday, /Despertar propuesto del día siguiente \(2026-10-19\): \*\*06:45\*\*/);
   assert.match(report.markdown, /Acostarse propuesto para la noche anterior/);
-  const midnight = buildWeeklyReport(backup({ settings: { ...defaults, scheduleEnabled: true, sleepHours: 8 }, overrides: { '2026-10-13': { schoolClosed: true, care: 'other', dropoff: 'other', pickup: 'other' } } }), '2026-10-12');
+  const midnight = buildWeeklyReport(backup({ settings: { ...defaults, scheduleEnabled: true, sleepHours: 8, gymDays: [] }, overrides: { '2026-10-13': { schoolClosed: true, care: 'other', dropoff: 'other', pickup: 'other' } } }), '2026-10-12');
   assert.match(midnight.markdown, /Acostarse para el próximo día: \*\*2026-10-13 a las 00:00\*\*/);
 });
 

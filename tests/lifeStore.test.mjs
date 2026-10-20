@@ -12,16 +12,46 @@ const workUrl=`data:text/javascript;base64,${Buffer.from(workSource).toString('b
 const work=await import(workUrl);
 const policySource=ts.transpileModule(await fs.readFile(new URL('../src/lib/datePolicy.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const policyUrl=`data:text/javascript;base64,${Buffer.from(policySource).toString('base64')}`;
+const plannerSource=ts.transpileModule(await fs.readFile(new URL('../src/lib/planner.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const plannerUrl=`data:text/javascript;base64,${Buffer.from(plannerSource).toString('base64')}`;
+const calendarSource=ts.transpileModule(await fs.readFile(new URL('../src/lib/calendarModel.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText.replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`);
+const calendarUrl=`data:text/javascript;base64,${Buffer.from(calendarSource).toString('base64')}`;
+const calendar=await import(calendarUrl);
+const grocerySource=ts.transpileModule(await fs.readFile(new URL('../src/lib/groceryList.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const groceryUrl=`data:text/javascript;base64,${Buffer.from(grocerySource).toString('base64')}`;
 async function store() {
   const items = new Map();
   globalThis.localStorage = {getItem:key => items.get(key) ?? null,setItem:(key,value) => items.set(key,String(value)),removeItem:key => items.delete(key)};
   const source = await fs.readFile(new URL('../src/lib/lifeStore.ts',import.meta.url),'utf8');
   const {outputText} = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}});
-  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();').replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`).replace(/from ['"]\.\/workChecklist['"]/,`from '${workUrl}'`).replace(/from ['"]\.\/datePolicy['"]/,`from '${policyUrl}'`);
+  const code = outputText.replace(/import\s*\{\s*useSyncExternalStore\s*\}\s*from\s*['"]react['"];?/, 'const useSyncExternalStore = (_subscribe,getSnapshot) => getSnapshot();').replace(/from ['"]\.\/training['"]/,`from '${trainingUrl}'`).replace(/from ['"]\.\/workChecklist['"]/,`from '${workUrl}'`).replace(/from ['"]\.\/groceryList['"]/ ,`from '${groceryUrl}'`).replace(/from ['"]\.\/calendarModel['"]/ ,`from '${calendarUrl}'`).replace(/from ['"]\.\/datePolicy['"]/,`from '${policyUrl}'`);
   const api = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}#${++instance}`);
   return {...api,items};
 }
 const settings = {childName:'tu peque',scheduleEnabled:false,gymDays:[1,3,5],schoolStart:'07:45',preparationMin:20,sleepHours:8,anchorMonday:'2026-10-12'};
+
+test('las compras de súper se guardan por cuenta y no se mezclan con la lista del meal prep',async()=>{
+  const s=await store();
+  const [,setGroceries]=s.useLifeState('groceries',{});
+  s.useLifeState('shopping',{});
+  const item={id:'bananas',name:'Bananas',quantity:'1 kg',category:'verduleria',checked:false,createdAt:100};
+  s.setStoreScope('project:comprasA');
+  setGroceries({bananas:item});
+  assert.deepEqual(s.getLifeBackup().sections.shopping,{});
+  assert(s.getPendingRecords().some(record=>record.section==='groceries'&&record.key==='bananas'));
+  setGroceries(all=>({...all,bananas:{...all.bananas,checked:true}}));
+  const before=s.getLifeBackup();
+  assert.throws(()=>setGroceries({bananas:{...item,accessToken:'no-se-guarda'}}));
+  assert.deepEqual(s.getLifeBackup().sections,before.sections);
+  s.setStoreScope('project:comprasB');
+  assert.deepEqual(s.getLifeBackup().sections.groceries,{});
+  assert.deepEqual(s.getPendingRecords(),[]);
+  s.setStoreScope('project:comprasA');
+  assert.equal(s.getLifeBackup().sections.groceries.bananas.checked,true);
+  assert.equal(s.getLifeBackup().sections.groceries.bananas.quantity,'1 kg');
+  s.setStoreScope(null);
+  assert.deepEqual(s.getLifeBackup().sections.groceries,{});
+});
 
 test('la excepción de Pewen se guarda por fecha sin borrar el cuidado familiar',async () => {
   const s = await store();
@@ -333,4 +363,104 @@ test('un respaldo explícito y el snapshot remoto conservan históricos aunque l
   const today=training.createTrainingSession({id:'today-gym',date:'2026-10-19',week:1,day:1,now:10000});
   setSessions(all=>({...all,[today.id]:today}));
   assert.equal(s.getLifeBackup().sections.gymSessions[today.id].date,'2026-10-19');
+});
+
+const calendarOccurrence=(id,date='2026-10-20',patch={})=>({id,date,calendarId:'personal@example.test',eventId:`remote-${id}`,title:'Compromiso externo',startMin:600,endMin:660,allDay:false,busy:true,updatedAt:1000,...patch});
+const calendarLink=(id,date='2026-10-20',patch={})=>({id,date,calendarId:'managed@example.test',eventId:`published-${id}`,localHash:'local-v1',remoteHash:'remote-v1',...patch});
+
+test('Calendar separa preferencias, snapshots y vínculos por cuenta y conserva sus colas al volver',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,20,12).getTime());
+  const s=await store();
+  const [,setPreferences]=s.useLifeState('calendarPreferences',{}),[,setEvents]=s.useLifeState('calendarEvents',{}),[,setLinks]=s.useLifeState('calendarLinks',{});
+  const preferences={...calendar.defaultCalendarPreferences(),sourceCalendarIds:['personal@example.test'],destinationId:'managed@example.test'};
+  s.setStoreScope('project:calendarA');
+  setPreferences({main:preferences});setEvents({one:calendarOccurrence('one')});setLinks({one:calendarLink('one')});
+  assert.deepEqual(s.getPendingRecords().map(record=>record.section).sort(),['calendarEvents','calendarLinks','calendarPreferences']);
+  s.setStoreScope('project:calendarB');
+  for(const section of ['calendarPreferences','calendarEvents','calendarLinks']) assert.deepEqual(s.useLifeState(section,{})[0],{});
+  assert.deepEqual(s.getPendingRecords(),[]);
+  setPreferences({main:{...calendar.defaultCalendarPreferences(),sourceCalendarIds:['other@example.test']}});
+  s.setStoreScope('project:calendarA');
+  assert.deepEqual(s.getLifeBackup().sections.calendarPreferences,{main:preferences});
+  assert.equal(s.getLifeBackup().sections.calendarEvents.one.calendarId,'personal@example.test');
+  assert.equal(s.getLifeBackup().sections.calendarLinks.one.calendarId,'managed@example.test');
+  assert.equal(s.getPendingRecords().length,3);
+  s.setStoreScope(null);
+  for(const section of ['calendarPreferences','calendarEvents','calendarLinks']) assert.deepEqual(s.useLifeState(section,{})[0],{});
+});
+
+test('los respaldos de Calendar rechazan credenciales y campos privados antes de cambiar cualquier sección',async()=>{
+  const s=await store();s.useLifeState('profile',{name:'Actual'});
+  s.useLifeState('calendarPreferences',{});s.useLifeState('calendarEvents',{});s.useLifeState('calendarLinks',{});
+  const preferences=calendar.defaultCalendarPreferences(), occurrence=calendarOccurrence('one'),link=calendarLink('one');
+  for(const [section,key,value] of [
+    ['calendarPreferences','main',{...preferences,accessToken:'never-store'}],
+    ['calendarPreferences','main',{...preferences,refreshToken:'never-store'}],
+    ['calendarEvents','one',{...occurrence,description:'Private notes'}],
+    ['calendarEvents','one',{...occurrence,attendees:[{email:'private@example.test'}]}],
+    ['calendarLinks','one',{...link,client_secret:'never-store'}],
+  ]) {
+    assert.throws(()=>s.restoreLifeBackup({version:1,sections:{profile:{name:'No aplicar'},[section]:{[key]:value}}}));
+    assert.equal(s.getLifeBackup().sections.profile.name,'Actual');
+    assert.deepEqual(s.getLifeBackup().sections[section],{});
+    assert.equal(s.isLifeRecord({section,key,value,deleted:false,updatedAt:1000}),false);
+  }
+  s.restoreLifeBackup({version:1,sections:{calendarPreferences:{main:preferences},calendarEvents:{one:occurrence},calendarLinks:{one:link}}});
+  const exported=s.getLifeBackup();
+  assert.deepEqual(exported.sections.calendarEvents.one,occurrence);
+  assert.doesNotMatch(JSON.stringify(exported),/accessToken|refreshToken|client_secret|Private notes|attendees/);
+  s.restoreLifeBackup({version:1,sections:{profile:{name:'Copia anterior'}}});
+  assert.deepEqual(s.getLifeBackup().sections.calendarEvents,exported.sections.calendarEvents,'una copia antigua no elimina las nuevas secciones');
+});
+
+test('Calendar cierra los snapshots y vínculos pasados sin permitir moverlos para esquivar el bloqueo',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,20,12).getTime());
+  const s=await store();const [,setEvents]=s.useLifeState('calendarEvents',{}),[,setLinks]=s.useLifeState('calendarLinks',{});
+  s.setStoreScope('project:calendarA');
+  s.restoreLifeBackup({version:1,sections:{calendarEvents:{old:calendarOccurrence('old','2026-10-19')},calendarLinks:{old:calendarLink('old','2026-10-19')}}});
+  s.acknowledgeRecords(s.getPendingRecords());
+  const original=s.getLifeBackup().sections;
+  setEvents(all=>({...all,old:{...all.old,title:'Cambio tardío'}}));
+  setEvents(all=>({...all,old:{...all.old,date:'2026-10-21'}}));
+  setEvents(all=>{all.old.title='Mutación en sitio';return all;});
+  setLinks(all=>({...all,old:{...all.old,remoteHash:'late-update'}}));
+  setLinks({});
+  assert.deepEqual(s.getLifeBackup().sections.calendarEvents,original.calendarEvents);
+  assert.deepEqual(s.getLifeBackup().sections.calendarLinks,original.calendarLinks);
+  assert.deepEqual(s.getPendingRecords(),[]);
+  setEvents(all=>({...all,today:calendarOccurrence('today')}));
+  setLinks(all=>({...all,today:calendarLink('today')}));
+  assert.equal(s.getPendingRecords().length,2);
+  setEvents(all=>({...all,today:{...all.today,date:'2026-10-19'}}));
+  assert.equal(s.getLifeBackup().sections.calendarEvents.today.date,'2026-10-20');
+});
+
+test('refrescar Calendar elimina sólo copias vigentes y conserva historia y fechas fuera del rango consultado',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,20,12).getTime());
+  const s=await store();const [,setEvents]=s.useLifeState('calendarEvents',{}),[,setLinks]=s.useLifeState('calendarLinks',{});
+  s.setStoreScope('project:calendarA');
+  const historical=calendarOccurrence('history','2026-10-19'), stale=calendarOccurrence('stale','2026-10-20'),outside=calendarOccurrence('outside','2026-11-20');
+  s.restoreLifeBackup({version:1,sections:{calendarEvents:{history:historical,stale,outside},calendarLinks:{history:calendarLink('history','2026-10-19'),stale:calendarLink('stale','2026-10-20')}}});
+  s.acknowledgeRecords(s.getPendingRecords());
+  const current=calendarOccurrence('fresh','2026-10-21');
+  setEvents({fresh:current});
+  assert.deepEqual(s.getPendingRecords(),[],'un reemplazo que borraría historia se rechaza entero');
+  setEvents(all=>({...Object.fromEntries(Object.entries(all).filter(([,event])=>event.date<'2026-10-20'||event.date>'2026-11-02')),fresh:current}));
+  assert.deepEqual(s.getLifeBackup().sections.calendarEvents,{history:historical,outside,fresh:current});
+  const deleted=s.getPendingRecords().filter(record=>record.deleted);
+  assert.deepEqual(deleted.map(record=>record.key),['stale']);
+  assert(s.getPendingRecords().some(record=>record.key==='fresh'&&!record.deleted));
+  assert(!s.getPendingRecords().some(record=>record.key==='history'));
+  setLinks(all=>{const next={...all};delete next.stale;return next;});
+  assert.deepEqual(Object.keys(s.getLifeBackup().sections.calendarLinks),['history']);
+  assert(s.getPendingRecords().some(record=>record.section==='calendarLinks'&&record.key==='stale'&&record.deleted));
+  s.acknowledgeRecords(s.getPendingRecords());
+  s.receiveCloudSnapshot([
+    {section:'calendarEvents',key:'history',value:historical,deleted:false,updatedAt:1000},
+    {section:'calendarEvents',key:'outside',value:outside,deleted:false,updatedAt:1000},
+    {section:'calendarEvents',key:'fresh',value:current,deleted:false,updatedAt:2000},
+    {section:'calendarEvents',key:'stale',value:null,deleted:true,updatedAt:2000},
+    {section:'calendarLinks',key:'history',value:calendarLink('history','2026-10-19'),deleted:false,updatedAt:1000},
+  ]);
+  assert.deepEqual(s.getLifeBackup().sections.calendarEvents,{history:historical,outside,fresh:current});
 });

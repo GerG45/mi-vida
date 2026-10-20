@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { addDays, buildDay, formatTime, isoDate, type DayOverride, type ExtraEvent, type Settings } from './planner';
 import { getNightPlan } from './sleep';
+import type { CalendarEventOccurrence } from './calendarModel';
 
 export type AlarmKind = 'wake' | 'reminder';
 export type DeviceAlarm = { id: string; title: string; date: string; time: string; kind: AlarmKind };
@@ -51,27 +52,27 @@ export function saveAlarmPreferences(scope: string | null, prefs: AlarmPreferenc
 
 /** Positive IDs are stable across a refresh; titles and times can change without accumulating alarms. */
 export function stableAlarmId(key: string): number { let hash = 2166136261; for (const c of key) {hash ^= c.charCodeAt(0);hash = Math.imul(hash,16777619);} return (hash >>> 0) % 2147483646 + 1; }
-export function buildAlarmBatch({settings,overrides = {},extras = [],done = {},preferences,now = Date.now()}:{settings:Settings;overrides?:Record<string,DayOverride>;extras?:ExtraEvent[];done?:Record<string,boolean>;preferences:AlarmPreferences;now?:number}): AlarmBatch {
+export function buildAlarmBatch({settings,overrides = {},extras = [],done = {},preferences,now = Date.now(),externalOccurrences = []}:{settings:Settings;overrides?:Record<string,DayOverride>;extras?:ExtraEvent[];done?:Record<string,boolean>;preferences:AlarmPreferences;now?:number;externalOccurrences?:CalendarEventOccurrence[]}): AlarmBatch {
   const prefs = normalizeAlarmPreferences(preferences), today = isoDate(new Date(now)), through = addDays(today,13);
   const candidates: Omit<AlarmPreview,'id'>[] = [];
   const push = (key:string,at:number,title:string,body:string,kind:AlarmKind,source:AlarmPreview['source']) => { if (Number.isFinite(at) && at > now) candidates.push({key,at,title:title.slice(0,180),body:body.slice(0,450),kind,source}); };
   if (settings.scheduleEnabled === true && prefs.bedtime) for (let offset=-1;offset<14;offset++) {
     // A night can start after midnight: include yesterday's night anchor, then
     // limit by the actual date of the bedtime instead of the date of the wake-up.
-    const night = getNightPlan(addDays(today,offset),settings,overrides,extras);
+    const night = getNightPlan(addDays(today,offset),settings,overrides,extras,externalOccurrences);
     if (night.bedtimeDate < today || night.bedtimeDate > through) continue;
     const wakeDay = new Date(night.wakeDate+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
     push(`bedtime:${night.wakeDate}`,alarmEpoch(night.bedtimeDate,formatTime(night.bedtime)),'Hora de ir a dormir',`Hora propuesta para acostarte: ${formatTime(night.bedtime)}. Para levantarte el ${wakeDay} a las ${formatTime(night.wakeTime)} y reservar ${night.sleepHours} h de descanso.${night.conflicts.length ? ' Hay compromisos después de esa hora; revisá la agenda.' : ''}`,'reminder','bedtime');
   }
   if (settings.scheduleEnabled === true && (prefs.wake || prefs.agenda || prefs.creatine)) for (let offset=0;offset<14;offset++) {
-    const date = addDays(today,offset), plan = buildDay(date,settings,overrides,extras);
+    const date = addDays(today,offset), plan = buildDay(date,settings,overrides,extras,externalOccurrences);
     if (prefs.wake) push(`wake:${date}`,alarmEpoch(date,formatTime(plan.wakeTime)),'Hora de levantarte',`Tu agenda de hoy empieza despertando a las ${formatTime(plan.wakeTime)}.`,'wake','wake');
     if (prefs.creatine && settings.breakfastCreatine === true) {
       const breakfast = plan.events.find(event => event.id === 'meal-breakfast');
       if (breakfast && !done[date+':'+breakfast.id]) push(`creatine:${date}`,alarmEpoch(date,formatTime(breakfast.start)),'Creatina con el desayuno','Tu recordatorio de cada mañana: tomar creatina junto con el desayuno.','reminder','creatine');
     }
     if (prefs.agenda) for (const event of plan.events) {
-      if (event.id.startsWith('care-') || done[date+':'+event.id] || !prefs.categories.includes(event.kind as AlarmCategory)) continue;
+      if (event.source === 'google' || event.id.startsWith('care-') || done[date+':'+event.id] || !prefs.categories.includes(event.kind as AlarmCategory)) continue;
       const at = alarmEpoch(date,formatTime(event.start)) - prefs.beforeMin * 60000;
       push(`agenda:${date}:${event.id}`,at,event.title,`${prefs.beforeMin ? `En ${prefs.beforeMin} min · ` : ''}${formatTime(event.start)}${event.tentative ? ' · Horario estimado' : ''}${event.detail ? ' · '+event.detail : ''}`,'reminder','agenda');
     }

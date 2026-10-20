@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { isoDate, type DayOverride, type ExtraEvent, type Settings } from '../lib/planner';
 import { alarmCategories, alarmEpoch, buildAlarmBatch, defaultAlarmPreferences, invalidateAlarmSchedule, isAndroidAlarms, LifeReminders, loadAlarmPreferences, queueAlarmSchedule, saveAlarmPreferences, type AlarmPermissionStatus, type AlarmPreferences } from '../lib/alarms';
 import './alarms.css';
+import type {CalendarEventOccurrence} from '../lib/calendarModel';
 
-export type AlarmSettingsProps = {settings:Settings;overrides:Record<string,DayOverride>;extras:ExtraEvent[];done:Record<string,boolean>;scope:string|null;cloudReady:boolean;hidden?:boolean};
+export type AlarmSettingsProps = {settings:Settings;overrides:Record<string,DayOverride>;extras:ExtraEvent[];done:Record<string,boolean>;externalOccurrences?:CalendarEventOccurrence[];scope:string|null;cloudReady:boolean;hidden?:boolean};
 const dateTime = (epoch:number) => new Date(epoch).toLocaleString('es-AR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 const dateLabel = (date:string) => new Date(date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'long'});
 const errorText = (error:unknown) => error instanceof Error ? error.message : 'Android no pudo completar la operación. Volvé a abrir Mi Vida y revisá los permisos.';
 
-export function AlarmSettings({settings,overrides,extras,done,scope,cloudReady,hidden=false}:AlarmSettingsProps) {
+export function AlarmSettings({settings,overrides,extras,done,externalOccurrences,scope,cloudReady,hidden=false}:AlarmSettingsProps) {
   const native = isAndroidAlarms();
   const [saved,setSaved] = useState(() => ({scope,prefs:loadAlarmPreferences(scope)}));
   const prefs = useMemo(() => saved.scope === scope ? saved.prefs : defaultAlarmPreferences(),[saved,scope]);
@@ -19,7 +20,7 @@ export function AlarmSettings({settings,overrides,extras,done,scope,cloudReady,h
   const [programmed,setProgrammed] = useState<{signature:string;at:number}|null>(null);
   const scheduleScope = useRef<string|null|undefined>(undefined);
   const mounted = useRef(true);
-  const batch = useMemo(() => buildAlarmBatch({settings,overrides,extras,done,preferences:prefs,now}),[settings,overrides,extras,done,prefs,now]);
+  const batch = useMemo(() => buildAlarmBatch({settings,overrides,extras,done,externalOccurrences,preferences:prefs,now}),[settings,overrides,extras,done,externalOccurrences,prefs,now]);
   const signature = JSON.stringify(cloudReady ? batch.notifications : []);
   const hasPreferences = prefs.wake || prefs.bedtime || prefs.agenda || prefs.creatine || prefs.custom.some(alarm => alarmEpoch(alarm.date,alarm.time)>now);
 

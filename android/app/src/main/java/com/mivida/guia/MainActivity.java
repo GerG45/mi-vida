@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(LifeRemindersPlugin.class);
         registerPlugin(LifeGoogleAuthPlugin.class);
+        registerPlugin(LifeCalendarAuthPlugin.class);
         registerPlugin(TextExportPlugin.class);
         super.onCreate(savedInstanceState);
     }

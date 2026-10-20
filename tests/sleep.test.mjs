@@ -23,10 +23,16 @@ test('una excepción de mañana recalcula esta noche y los cambios de jardín se
  assert.equal(school.wakeTime,405);
 });
 test('medianoche corresponde al próximo día y el sueño configurado cambia el objetivo',()=>{
- const night=getNightPlan('2026-10-19',settings);
- assert.equal(night.wakeTime,480);assert.equal(night.bedtime,0);assert.equal(night.bedtimeDate,'2026-10-20');
- const longer=getNightPlan('2026-10-19',{...settings,sleepHours:9});
- assert.equal(longer.bedtime,1380);assert.equal(longer.bedtimeDate,'2026-10-19');
+ const night=getNightPlan('2026-10-21',settings);
+ assert.equal(night.wakeTime,480);assert.equal(night.bedtime,0);assert.equal(night.bedtimeDate,'2026-10-22');
+ const longer=getNightPlan('2026-10-21',{...settings,sleepHours:9});
+ assert.equal(longer.bedtime,1380);assert.equal(longer.bedtimeDate,'2026-10-21');
+});
+
+test('el lunes propone acostarse23:45 para preparar el entrenamiento del martes08:30',()=>{
+ const night=getNightPlan('2026-10-19',{...settings,mealPrepTuesdayStart:'10:30'});
+ assert.equal(night.wakeDate,'2026-10-20');assert.equal(night.wakeTime,465);
+ assert.equal(night.bedtimeDate,'2026-10-19');assert.equal(night.bedtime,1425);
 });
 test('un compromiso tardío se avisa sin moverlo ni contar cuidado como impedimento para dormir',()=>{
  const night=getNightPlan('2026-10-18',settings,{},[{id:'late',title:'Ensayo tarde',date:'2026-10-18',startHHmm:'22:00',durationMin:80,travelMin:0,kind:'work'}]);
