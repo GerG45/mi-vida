@@ -37,10 +37,60 @@ test('acostarse del domingo usa las 22:45 reales del domingo antes del lunes B, 
   assert.equal(first.kind,'reminder');
   assert.equal(first.source,'bedtime');
   assert.match(first.body,/06:45/);
-  assert(batch.preview.every(alarm=>alarm.source==='bedtime'));
+  assert(batch.preview.every(alarm=>['bedtime','bedtime-prepare'].includes(alarm.source)));
   const changed=alarms.buildAlarmBatch({settings:{...settings,sleepHours:7},preferences,now:localEpoch(18)}).preview.find(alarm=>alarm.key===first.key);
   assert.equal(changed.at,localEpoch(18,23,45));
   assert.equal(changed.id,first.id,'el aviso del mismo despertar se actualiza sin acumular otro ID');
+});
+
+test('cada noche tiene dos fases separadas por 45 minutos y ambas usan el tono de recordatorio',()=>{
+  const preferences=prefs({bedtime:true,beforeMin:60,categories:[]});
+  const batch=alarms.buildAlarmBatch({settings,preferences,now:localEpoch(18)});
+  const sleep=batch.preview.find(alarm=>alarm.key==='bedtime:2026-10-19');
+  const prepare=batch.preview.find(alarm=>alarm.key==='bedtime-prepare:2026-10-19');
+  assert.equal(prepare.at,localEpoch(18,22,0));
+  assert.equal(sleep.at-prepare.at,45*60000);
+  assert.equal(prepare.kind,'reminder');assert.equal(sleep.kind,'reminder');
+  assert.notEqual(prepare.id,sleep.id);
+  assert.match(prepare.body,/45 min.*22:45/);
+  for(const night of batch.preview.filter(alarm=>alarm.source==='bedtime')) {
+    const earlier=batch.preview.find(alarm=>alarm.key===night.key.replace('bedtime:','bedtime-prepare:'));
+    if(earlier)assert.equal(night.at-earlier.at,45*60000);
+  }
+  const changed=alarms.buildAlarmBatch({settings:{...settings,sleepHours:7},preferences,now:localEpoch(18)});
+  for(const before of [sleep,prepare]) {
+    const after=changed.preview.find(alarm=>alarm.key===before.key);
+    assert.equal(after.id,before.id);assert.equal(after.at,before.at+60*60000);
+  }
+});
+
+test('prepararse para una hora después de medianoche cae en la fecha anterior y no vuelve a sonar si ya pasó',()=>{
+  const config={...settings,sleepHours:7.5};
+  const batch=alarms.buildAlarmBatch({settings:config,preferences:prefs({bedtime:true}),now:localEpoch(23,23,30)});
+  const prepare=batch.preview.find(alarm=>alarm.key==='bedtime-prepare:2026-10-24');
+  const sleep=batch.preview.find(alarm=>alarm.key==='bedtime:2026-10-24');
+  assert.equal(prepare.at,localEpoch(23,23,45));assert.equal(sleep.at,localEpoch(24,0,30));
+  const later=alarms.buildAlarmBatch({settings:config,preferences:prefs({bedtime:true}),now:localEpoch(24,0,10)});
+  assert(!later.preview.some(alarm=>alarm.key===prepare.key));
+  assert.equal(later.preview.find(alarm=>alarm.key===sleep.key).id,sleep.id);
+});
+
+test('el último día del horizonte incluye la preparación aunque acostarse ya caiga fuera del rango',()=>{
+  const config={...settings,sleepHours:7.5};
+  const batch=alarms.buildAlarmBatch({settings:config,preferences:prefs({bedtime:true}),now:localEpoch(11,12)});
+  assert.equal(batch.through,'2026-10-24');
+  assert.equal(batch.preview.find(alarm=>alarm.key==='bedtime-prepare:2026-10-25').at,localEpoch(24,23,45));
+  assert(!batch.preview.some(alarm=>alarm.key==='bedtime:2026-10-25'));
+  assert(batch.preview.every(alarm=>planner.isoDate(new Date(alarm.at))>= '2026-10-11'&&planner.isoDate(new Date(alarm.at))<=batch.through));
+});
+
+test('apagar la rutina nocturna elimina las dos fases sin cambiar el despertador ni las alarmas puntuales',()=>{
+  const preferences=prefs({wake:true,bedtime:true,custom:[{id:'custom',title:'Personal',date:'2026-10-20',time:'12:00',kind:'wake'}]});
+  const on=alarms.buildAlarmBatch({settings,preferences,now:localEpoch(19)});
+  const off=alarms.buildAlarmBatch({settings,preferences:{...preferences,bedtime:false},now:localEpoch(19)});
+  assert(on.preview.some(alarm=>alarm.source==='bedtime-prepare'));
+  assert(off.preview.every(alarm=>!alarm.source.startsWith('bedtime')));
+  assert.deepEqual(off.notifications,on.preview.filter(alarm=>!alarm.source.startsWith('bedtime')).map(({id,at,title,body,kind})=>({id,at,title,body,kind})));
 });
 
 test('acostarse después de medianoche conserva la fecha y se encuentra al abrir la app ya pasada medianoche',()=>{
@@ -125,6 +175,35 @@ test('el límite de 200 reserva las alarmas puntuales y conserva orden cronológ
   assert(batch.omitted>0);
   assert(batch.preview.some(alarm=>alarm.key==='custom:far'));
   assert(batch.preview.every((alarm,index)=>index===0||alarm.at>=batch.preview[index-1].at));
+});
+
+test('un exceso de compromisos no desplaza los despertares ni ninguna fase nocturna',()=>{
+  const extras=Array.from({length:30},(_,index)=>({id:`extra-${index}`,title:`Evento ${index}`,days:[0,1,2,3,4,5,6],startHHmm:'12:00',durationMin:5,travelMin:0,kind:'personal'}));
+  const preferences=prefs({wake:true,bedtime:true,agenda:true,custom:[{id:'far',title:'Puntual',date:'2027-01-01',time:'10:00',kind:'wake'}]});
+  const full=alarms.buildAlarmBatch({settings,extras,preferences,now:localEpoch(19)});
+  const protectedBatch=alarms.buildAlarmBatch({settings,extras,preferences:{...preferences,agenda:false},now:localEpoch(19)});
+  assert.equal(full.notifications.length,200);assert(full.omitted>0);
+  for(const expected of protectedBatch.preview) {
+    const actual=full.preview.find(alarm=>alarm.key===expected.key);
+    assert(actual,expected.key);assert.equal(actual.at,expected.at);assert.equal(actual.id,expected.id);
+  }
+});
+
+test('la actualización Android activa una vez ambos avisos, conserva las demás elecciones y respeta apagarlos después',()=>{
+  const items=new Map();globalThis.localStorage={getItem:key=>items.get(key)||null,setItem:(key,value)=>items.set(key,value)};
+  const key=scope=>'mi-vida.device-alarms.v1.'+encodeURIComponent(scope);
+  const previous=prefs({wake:true,bedtime:false,creatine:true,beforeMin:7,custom:[{id:'turno',title:'Turno',date:'2026-11-01',time:'10:00',kind:'reminder'}]});
+  items.set(key('project:A'),JSON.stringify(previous));
+  const migrated=alarms.loadAlarmPreferences('project:A',true);
+  assert.deepEqual(migrated,{...previous,bedtime:true});
+  assert.equal(JSON.parse(items.get(key('project:A'))).bedtimeRoutineVersion,1);
+  alarms.saveAlarmPreferences('project:A',{...migrated,bedtime:false});
+  assert.equal(alarms.loadAlarmPreferences('project:A',true).bedtime,false);
+  assert.equal(alarms.loadAlarmPreferences('project:B',true).bedtime,true);
+  assert.equal(alarms.loadAlarmPreferences('project:B',true).wake,false);
+  items.set(key('project:web'),JSON.stringify(previous));
+  assert.equal(alarms.loadAlarmPreferences('project:web',false).bedtime,false);
+  assert.equal(JSON.parse(items.get(key('project:web'))).bedtimeRoutineVersion,undefined);
 });
 
 test('ajustes locales separados por cuenta y valores importados estrictos',()=>{

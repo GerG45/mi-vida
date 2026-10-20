@@ -4,13 +4,19 @@ La APK incluye la interfaz dentro de la app: no necesita abrir la página en Chr
 
 ## Primera vez en el teléfono
 
-1. Instalar `Mi-Vida-0.7.0-debug.apk` encima de la versión anterior y abrir Mi Vida.
+1. Instalar `Mi-Vida-0.7.1-debug.apk` encima de la versión anterior y abrir Mi Vida.
 2. En **Ajustes**, entrar con la misma cuenta Google. Esperar a que aparezcan los horarios personales y el estado de la nube.
 3. En **Alarmas**, permitir notificaciones y alarmas exactas. La pantalla completa es un permiso adicional; también se puede detener o posponer desde la notificación.
 4. Revisar el volumen de alarmas y tocar **Probar alarma en 30 segundos**. Bloquear la pantalla y comprobar sonido, Detener y Posponer antes de usar el despertador de la agenda.
 5. Activar el despertar calculado, los recordatorios elegidos o una alarma puntual. Revisar la próxima alarma y el estado confirmado por Android.
 
 En Xiaomi/POCO, revisar el inicio automático y las restricciones de batería de Mi Vida si la prueba no funciona con la pantalla bloqueada. La app muestra los permisos que Android permite consultar; no afirma conocer el estado de los ajustes específicos de HyperOS.
+
+## Descanso diario de la versión 0.7.1
+
+Al actualizar y abrir la APK, se activa una vez «Prepararme y acostarme» para esa cuenta en ese teléfono. Conserva los demás avisos y el sonido del despertador. Si después desactivás la opción, se respeta al reiniciar. Requiere agenda activada y permisos de notificaciones y alarmas exactas.
+
+La hora de prepararte también aparece junto al descanso en «Mi día», tanto en web como en Android. Ambos avisos se adaptan al próximo despertar, incluso si acostarse es después de medianoche. Los despertares y los dos avisos de descanso se reservan antes de llenar el límite de 200 con compromisos generales.
 
 ## Calendar y compras de la versión 0.7.0
 
@@ -54,7 +60,8 @@ La versión 0.5.0 incorpora excepciones para un lunes sin Pewen, colectivo al en
 
 - El despertar suena por el canal de volumen de alarmas, con vibración, durante un máximo de 10 minutos. Se puede detener o posponer 10 minutos sin internet.
 - La opción «Creatina con el desayuno» programa un recordatorio independiente al comienzo de cada desayuno, incluso en días de descanso. Se activa en cada teléfono y requiere tener la rutina habilitada en Ajustes; no indica dosis.
-- «Recordarme cuándo acostarme» avisa a la hora propuesta para dormir según el despertar del siguiente día y las horas de sueño configuradas. Se activa por dispositivo.
+- «Prepararme y acostarme» programa dos avisos diarios: uno 45 minutos antes para empezar a cerrar el día y otro a la hora propuesta para acostarte. Esa hora se calcula con el despertar del día siguiente y tus horas de descanso. Una sola opción activa o desactiva ambos avisos en este teléfono; la vista previa muestra las próximas dos fechas y horas para revisarlas.
+- Los dos avisos para dormir usan el sonido breve de recordatorios y respetan el volumen de notificaciones. El despertador mantiene su sonido, volumen y controles de Detener y Posponer. Los avisos sonoros se programan desde la APK; la web explica la función, pero no reproduce estas alarmas con la página cerrada.
 - Los recordatorios generan una notificación sonora breve. Respetan la configuración de sonido y No molestar de Android.
 - La agenda se prepara para los siguientes 14 días. Abrir la app renueva ese período. Hasta 200 avisos por lote; las alarmas puntuales tienen prioridad y pueden quedar programadas más allá de los 14 días.
 - Los ajustes y alarmas puntuales pertenecen al dispositivo y a la cuenta. No se copian a otros teléfonos. Al cambiar de cuenta se cancela la programación anterior.

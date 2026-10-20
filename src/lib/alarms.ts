@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { addDays, buildDay, formatTime, isoDate, type DayOverride, type ExtraEvent, type Settings } from './planner';
-import { getNightPlan } from './sleep';
+import { getNightPlan, SLEEP_PREPARATION_MINUTES } from './sleep';
 import type { CalendarEventOccurrence } from './calendarModel';
 
 export type AlarmKind = 'wake' | 'reminder';
@@ -8,7 +8,7 @@ export type DeviceAlarm = { id: string; title: string; date: string; time: strin
 export type AlarmCategory = 'travel' | 'school' | 'work' | 'recording' | 'gym' | 'personal' | 'family';
 export type AlarmPreferences = { wake: boolean; bedtime: boolean; agenda: boolean; creatine: boolean; beforeMin: number; categories: AlarmCategory[]; custom: DeviceAlarm[] };
 export type ScheduledAlarm = { id: number; at: number; title: string; body: string; kind: AlarmKind };
-export type AlarmPreview = ScheduledAlarm & { key: string; source: 'wake' | 'bedtime' | 'agenda' | 'creatine' | 'custom' };
+export type AlarmPreview = ScheduledAlarm & { key: string; source: 'wake' | 'bedtime' | 'bedtime-prepare' | 'agenda' | 'creatine' | 'custom' };
 export type AlarmBatch = { notifications: ScheduledAlarm[]; preview: AlarmPreview[]; through: string; omitted: number };
 export type AlarmPermissionStatus = { granted: boolean; notifications: boolean; exactAlarms: boolean; fullScreen: boolean; alarmVolume: number; alarmMaxVolume: number; pending: number; stored: number; nextAt: number | null; lastError: string | null };
 export interface LifeRemindersPlugin {
@@ -47,8 +47,21 @@ export function normalizeAlarmPreferences(raw: unknown): AlarmPreferences {
   };
 }
 function preferenceKey(scope: string | null) { return 'mi-vida.device-alarms.v1.' + encodeURIComponent(scope || 'local'); }
-export function loadAlarmPreferences(scope: string | null) { try { return normalizeAlarmPreferences(JSON.parse(localStorage.getItem(preferenceKey(scope)) || 'null')); } catch { return defaultAlarmPreferences(); } }
-export function saveAlarmPreferences(scope: string | null, prefs: AlarmPreferences) { localStorage.setItem(preferenceKey(scope),JSON.stringify(normalizeAlarmPreferences(prefs))); }
+export function loadAlarmPreferences(scope: string | null, enableSleepRoutine = isAndroidAlarms()): AlarmPreferences {
+  let raw: unknown = null;
+  try { raw=JSON.parse(localStorage.getItem(preferenceKey(scope)) || 'null'); } catch { /* Keep the rest of the app usable when storage is unavailable. */ }
+  const preferences=normalizeAlarmPreferences(raw);
+  // The requested two-step routine is enabled once on Android, without changing wake-up choices.
+  // Persisting the marker together with the choices preserves a later explicit opt-out.
+  if(enableSleepRoutine && (!raw || typeof raw!=='object' || !('bedtimeRoutineVersion' in raw) || raw.bedtimeRoutineVersion!==1)) {
+    const migrated={...preferences,bedtime:true};
+    try { saveAlarmPreferences(scope,migrated); } catch { /* Still usable for this session; later explicit changes report storage errors in the UI. */ }
+    return migrated;
+  }
+  return preferences;
+}
+export function saveAlarmPreferences(scope: string | null, prefs: AlarmPreferences) { localStorage.setItem(preferenceKey(scope),JSON.stringify({...normalizeAlarmPreferences(prefs),bedtimeRoutineVersion:1})); }
+export const BEDTIME_PREPARATION_MINUTES = SLEEP_PREPARATION_MINUTES;
 
 /** Positive IDs are stable across a refresh; titles and times can change without accumulating alarms. */
 export function stableAlarmId(key: string): number { let hash = 2166136261; for (const c of key) {hash ^= c.charCodeAt(0);hash = Math.imul(hash,16777619);} return (hash >>> 0) % 2147483646 + 1; }
@@ -57,12 +70,15 @@ export function buildAlarmBatch({settings,overrides = {},extras = [],done = {},p
   const candidates: Omit<AlarmPreview,'id'>[] = [];
   const push = (key:string,at:number,title:string,body:string,kind:AlarmKind,source:AlarmPreview['source']) => { if (Number.isFinite(at) && at > now) candidates.push({key,at,title:title.slice(0,180),body:body.slice(0,450),kind,source}); };
   if (settings.scheduleEnabled === true && prefs.bedtime) for (let offset=-1;offset<14;offset++) {
-    // A night can start after midnight: include yesterday's night anchor, then
-    // limit by the actual date of the bedtime instead of the date of the wake-up.
+    // Each phase is bounded by its own actual date: a midnight bedtime can have
+    // its preparation on the previous day, including the last day of this window.
     const night = getNightPlan(addDays(today,offset),settings,overrides,extras,externalOccurrences);
-    if (night.bedtimeDate < today || night.bedtimeDate > through) continue;
     const wakeDay = new Date(night.wakeDate+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
-    push(`bedtime:${night.wakeDate}`,alarmEpoch(night.bedtimeDate,formatTime(night.bedtime)),'Hora de ir a dormir',`Hora propuesta para acostarte: ${formatTime(night.bedtime)}. Para levantarte el ${wakeDay} a las ${formatTime(night.wakeTime)} y reservar ${night.sleepHours} h de descanso.${night.conflicts.length ? ' Hay compromisos después de esa hora; revisá la agenda.' : ''}`,'reminder','bedtime');
+    const bedtimeAt=alarmEpoch(night.bedtimeDate,formatTime(night.bedtime));
+    const prepareAt=bedtimeAt-BEDTIME_PREPARATION_MINUTES*60000;
+    const inWindow=(at:number)=>{const date=isoDate(new Date(at));return date>=today&&date<=through;};
+    if(inWindow(prepareAt))push(`bedtime-prepare:${night.wakeDate}`,prepareAt,'Prepararte para dormir',`En ${BEDTIME_PREPARATION_MINUTES} min, a las ${formatTime(night.bedtime)}, es tu hora propuesta para acostarte. Empezá a bajar el ritmo y dejá listo lo de mañana. Despertar del ${wakeDay}: ${formatTime(night.wakeTime)}.`,'reminder','bedtime-prepare');
+    if(inWindow(bedtimeAt))push(`bedtime:${night.wakeDate}`,bedtimeAt,'Hora de ir a dormir',`Hora propuesta para acostarte: ${formatTime(night.bedtime)}. Para levantarte el ${wakeDay} a las ${formatTime(night.wakeTime)} y reservar ${night.sleepHours} h de descanso.${night.conflicts.length ? ' Hay compromisos después de esa hora; revisá la agenda.' : ''}`,'reminder','bedtime');
   }
   if (settings.scheduleEnabled === true && (prefs.wake || prefs.agenda || prefs.creatine)) for (let offset=0;offset<14;offset++) {
     const date = addDays(today,offset), plan = buildDay(date,settings,overrides,extras,externalOccurrences);
@@ -78,10 +94,12 @@ export function buildAlarmBatch({settings,overrides = {},extras = [],done = {},p
     }
   }
   for (const alarm of prefs.custom) push(`custom:${alarm.id}`,alarmEpoch(alarm.date,alarm.time),alarm.title,'Recordatorio puntual de Mi Vida.',alarm.kind,'custom');
-  // Reserve capacity for explicit punctual alarms, even when they fall beyond the rolling agenda horizon.
+  // Protect punctual alarms, waking and both sleep phases before filling the remaining agenda slots.
   const custom = candidates.filter(c => c.source === 'custom').sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
-  const automatic = candidates.filter(c => c.source !== 'custom').sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
-  const selected = [...custom,...automatic.slice(0,Math.max(0,200-custom.length))];
+  const protectedSources = new Set<AlarmPreview['source']>(['wake','bedtime','bedtime-prepare']);
+  const protectedAutomatic = candidates.filter(c => protectedSources.has(c.source)).sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
+  const automatic = candidates.filter(c => c.source !== 'custom'&&!protectedSources.has(c.source)).sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
+  const selected = [...custom,...protectedAutomatic,...automatic.slice(0,Math.max(0,200-custom.length-protectedAutomatic.length))];
   const ids = new Set<number>();
   const preview = selected.sort((a,b) => a.key.localeCompare(b.key)).map(candidate => {let id=stableAlarmId(candidate.key);while(ids.has(id)) id=id === 2147483646 ? 1 : id+1;ids.add(id);return {...candidate,id};}).sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
   return {notifications:preview.map(({id,at,title,body,kind}) => ({id,at,title,body,kind})),preview,through,omitted:candidates.length-preview.length};

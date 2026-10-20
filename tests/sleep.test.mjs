@@ -13,6 +13,7 @@ test('el domingo calcula acostarse22:45 para el despertar del lunes B06:45',()=>
  const night=getNightPlan('2026-10-18',settings);
  assert.equal(night.wakeDate,'2026-10-19');assert.equal(night.wakeTime,405);
  assert.equal(night.bedtimeDate,'2026-10-18');assert.equal(night.bedtime,1365);
+ assert.equal(night.preparationDate,'2026-10-18');assert.equal(night.preparationTime,1320);
 });
 test('una excepción de mañana recalcula esta noche y los cambios de jardín se conservan',()=>{
  const normal=getNightPlan('2026-10-25',settings);
@@ -25,8 +26,10 @@ test('una excepción de mañana recalcula esta noche y los cambios de jardín se
 test('medianoche corresponde al próximo día y el sueño configurado cambia el objetivo',()=>{
  const night=getNightPlan('2026-10-21',settings);
  assert.equal(night.wakeTime,480);assert.equal(night.bedtime,0);assert.equal(night.bedtimeDate,'2026-10-22');
+ assert.equal(night.preparationDate,'2026-10-21');assert.equal(night.preparationTime,1395);
  const longer=getNightPlan('2026-10-21',{...settings,sleepHours:9});
  assert.equal(longer.bedtime,1380);assert.equal(longer.bedtimeDate,'2026-10-21');
+ assert.equal(longer.preparationDate,'2026-10-21');assert.equal(longer.preparationTime,1335);
 });
 
 test('el lunes propone acostarse23:45 para preparar el entrenamiento del martes08:30',()=>{
