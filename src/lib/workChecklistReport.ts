@@ -30,7 +30,7 @@ export function workChecklistReport(raw: unknown, dates: string[], exportedAt: n
     `- Ítems asignados a estas fechas: **${items.length}**. Con check al exportar: **${marked}**.`,
     '- Cada lista corresponde a su fecha y bloque asignados. El check muestra el estado guardado al exportar; no demuestra que se haya terminado durante esa fecha ni mide cuánto se trabajó.',
     '- Los minutos estimados son una intención. El cronómetro acumula sólo el tiempo iniciado por mí, incluidas las distracciones mientras sigue encendido; no verifica actividad ni productividad. Un check o una estimación no generan tiempo registrado.', ''];
-  if (!items.length) lines.push('No hay ítems de trabajo guardados para estas fechas. Las marcas de agenda y los pendientes GTD se muestran por separado.', '');
+  if (!items.length) lines.push('No hay ítems de trabajo guardados para estas fechas. Las marcas de agenda se muestran por separado.', '');
   else {
     if (estimates.length) lines.push(`- Estimación guardada para **${estimates.length} de ${items.length}** ítems: **${estimates.reduce((total, item) => total + item.estimatedMinutes!, 0).toLocaleString('es-AR')} min**.`);
     if (timed.length) lines.push(`- Cronómetro acumulado en estas listas${items.some(stillRunning) ? ' hasta el momento de exportar' : ''}: **${minutes(timed.reduce((total, item) => total + elapsed(item), 0))} min**.`);

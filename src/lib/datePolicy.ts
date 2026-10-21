@@ -34,7 +34,7 @@ const datedKey = (key: string): string => /^\d{4}-\d{2}-\d{2}:.+$/.test(key) ? k
 /**
  * This is the local-write boundary, independent of selected tabs or stale UI callbacks.
  * Cloud hydration and explicit backup restoration keep legitimate historical records.
- * Definitions (GTD, routines, settings, recurring events) remain global.
+ * Definitions (routines, settings, recurring events) remain global.
  */
 export function canMutateDateSection(section: string, key: string, before: unknown, after: unknown, now: Date | number = Date.now()): boolean {
   const access = (date: unknown): DateAccess => getDateAccess(typeof date === 'string' ? date : '', now);

@@ -37,6 +37,18 @@ test('el lunes propone acostarse23:45 para preparar el entrenamiento del martes0
  assert.equal(night.wakeDate,'2026-10-20');assert.equal(night.wakeTime,465);
  assert.equal(night.bedtimeDate,'2026-10-19');assert.equal(night.bedtime,1425);
 });
+
+test('las noches previas a entrenar miércoles y viernes respetan el jardín o anticipan la salida de casa si lleva otra persona',()=>{
+ for(const [evening,wakeDate] of [['2026-10-20','2026-10-21'],['2026-10-22','2026-10-23'],['2026-10-27','2026-10-28'],['2026-10-29','2026-10-30']]) {
+  const normal=getNightPlan(evening,settings);
+  assert.equal(normal.wakeDate,wakeDate);assert.equal(normal.wakeTime,405);
+  assert.equal(normal.bedtimeDate,evening);assert.equal(normal.bedtime,1365);
+  assert.equal(normal.preparationDate,evening);assert.equal(normal.preparationTime,1320);
+  const other=getNightPlan(evening,settings,{[wakeDate]:{dropoff:'other'}});
+  assert.equal(other.wakeTime,465);assert.equal(other.bedtimeDate,evening);assert.equal(other.bedtime,1425);
+  assert.equal(other.preparationDate,evening);assert.equal(other.preparationTime,1380);
+ }
+});
 test('un compromiso tardío se avisa sin moverlo ni contar cuidado como impedimento para dormir',()=>{
  const night=getNightPlan('2026-10-18',settings,{},[{id:'late',title:'Ensayo tarde',date:'2026-10-18',startHHmm:'22:00',durationMin:80,travelMin:0,kind:'work'}]);
  assert(night.conflicts.some(w=>w.includes('Ensayo tarde')));

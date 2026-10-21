@@ -6,7 +6,21 @@ Desde el bloque de entrenamiento de «Mi día» o la pestaña «Entrenar» se ab
 
 Elegí rutina y semana, revisá la variante de cada ejercicio y empezá. La sesión conserva las series de aproximación indicadas por el plan. Registrá los kilos y las repeticiones o segundos que realmente hiciste y completá cada serie. Las aproximaciones se distinguen de las series efectivas.
 
-Los descansos se calculan a partir de una hora de finalización, de manera que no se estiren si el teléfono suspende la web. Podés pausarlos, ajustar el tiempo y saltarlos. Al volver, el contador recupera el tiempo correspondiente; la web no garantiza sonido con la pantalla bloqueada. Los despertadores y recordatorios de la APK conservan su configuración.
+Los descansos y las series cronometradas se calculan a partir de una hora de finalización. Podés pausarlos, ajustar el tiempo y saltarlos. Al volver, el contador recupera el tiempo correspondiente.
+
+En la APK, los contadores que iniciás se programan también en Android para avisar con el celular bloqueado o Mi Vida en segundo plano. Usan el canal **Entrenamiento · tono suave**, con el ding de recordatorios. No usan el sonido de despertar. Pausar, saltar, cambiar variante o terminar la sesión cancela los contadores correspondientes; cambiar de ejercicio cancela el de serie, y explorar otra página no cancela el descanso. Los avisos nunca marcan series como realizadas.
+
+Requieren notificaciones habilitadas, permiso de **Alarmas y recordatorios** y sonido en ese canal. La app muestra una ayuda si falta alguno. El volumen es el de alarmas del dispositivo y Android conserva los ajustes de sonido o No molestar elegidos por la persona. Una app detenida explícitamente desde los ajustes de Android necesita volver a abrirse. No se prometen avisos después de ese cierre forzado. La web conserva el bip de descanso mientras su pantalla permanece abierta.
+
+También hay un aviso al **fin previsto del bloque de entrenamiento** de la agenda. Se activa por defecto al actualizar y se puede desactivar por separado en Alarmas → **Avisar al terminar el bloque de entrenamiento**. Programa hasta 14 días y se renueva al usar Mi Vida. Se omite cuando el bloque ya está marcado como completo. Es una referencia del plan, sin duración real inferida ni finalización automática de la sesión.
+
+Los contadores activos corresponden a la fecha local de hoy; no se vuelven a hacer sonar al consultar registros vencidos ni después de medianoche. Los plazos del contador se guardan sólo en el dispositivo para la entrega del aviso. Las sesiones continúan usando Firebase como antes.
+
+## Entrenamiento por la mañana
+
+Miércoles y viernes buscan el primer hueco matutino a partir de las 08:30, después de las obligaciones del jardín. Con los traslados actuales y entrega propia: regreso a casa 08:20, ida al gimnasio 15 minutos y sesión **08:35–09:50**. Regreso y ducha terminan 10:20, antes de la cocina del viernes a las 10:30. Cuando otra persona se encarga de la entrega y los cuidados lo permiten, la sesión queda **08:30–09:45**.
+
+Si un compromiso o el cuidado de Almendra impiden completar sesión, ida, regreso y ducha por la mañana, la agenda muestra el aviso y deja el bloque sin ubicar. No lo pasa a la tarde ni desplaza los horarios fijos. El despertar y el descanso propuestos se recalculan con esos compromisos.
 
 Cada variante recupera sus propias cargas registradas. No se mezclan cargas entre máquina y mancuernas, ni se suben pesos automáticamente. La referencia anterior no se registra como una serie nueva hasta completarla. En los ejercicios con mancuernas, mantené siempre la misma convención de kilos al registrar para poder comparar.
 

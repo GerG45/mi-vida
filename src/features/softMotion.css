@@ -10,8 +10,7 @@
 /* Scroll handles cards; existing view/day fades continue to introduce the page. */
 .soft-motion-root :is(
   .focus-card, .wake-card, .timeline-card, .family-card, .food-card, .panel,
-  .journal-inspiration, .journal-book-quote, .habits-intro, .gtd-capture-card,
-  .gtd-review-summary, .calendar-day, .training-day-entry, .work-checklist-entry,
+  .journal-inspiration, .journal-book-quote, .habits-intro, .calendar-day, .training-day-entry, .work-checklist-entry,
   .daily-inspiration, .gym-welcome, .gym-preview-card, .gym-exercise-card,
   .gym-chart-panel, .gym-history-list, .gym-weekly-stats, .gym-custom-intro,
   .gym-builder, .gym-saved-routines

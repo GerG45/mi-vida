@@ -54,6 +54,9 @@
             android:name=".LifeReminderReceiver"
             android:exported="false" />
         <receiver
+            android:name=".LifeTrainingTimerReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".LifeReminderBootReceiver"
             android:exported="false">
             <intent-filter>

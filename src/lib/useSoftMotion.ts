@@ -4,7 +4,7 @@ import {useEffect, useRef, type RefObject} from 'react';
 const CARD_SELECTOR = [
   '.focus-card', '.wake-card', '.timeline-card', '.family-card', '.food-card',
   '.panel', '.journal-inspiration', '.journal-book-quote', '.habits-intro',
-  '.gtd-capture-card', '.gtd-review-summary', '.calendar-day',
+  '.calendar-day',
   '.training-day-entry', '.work-checklist-entry', '.daily-inspiration',
   '.gym-welcome', '.gym-preview-card', '.gym-exercise-card', '.gym-chart-panel',
   '.gym-history-list', '.gym-weekly-stats', '.gym-custom-intro', '.gym-builder',

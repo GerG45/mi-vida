@@ -4,13 +4,21 @@ La APK incluye la interfaz dentro de la app: no necesita abrir la página en Chr
 
 ## Primera vez en el teléfono
 
-1. Instalar `Mi-Vida-0.8.0-debug.apk` encima de la versión anterior y abrir Mi Vida.
+1. Instalar `Mi-Vida-0.9.0-debug.apk` encima de la versión anterior y abrir Mi Vida.
 2. En **Ajustes**, entrar con la misma cuenta Google. Esperar a que aparezcan los horarios personales y el estado de la nube.
 3. En **Alarmas**, permitir notificaciones y alarmas exactas. La pantalla completa es un permiso adicional; también se puede detener o posponer desde la notificación.
 4. Revisar el volumen de alarmas y tocar **Probar alarma en 30 segundos**. Bloquear la pantalla y comprobar sonido, Detener y Posponer antes de usar el despertador de la agenda.
 5. Activar el despertar calculado, los recordatorios elegidos o una alarma puntual. Revisar la próxima alarma y el estado confirmado por Android.
 
 En Xiaomi/POCO, revisar el inicio automático y las restricciones de batería de Mi Vida si la prueba no funciona con la pantalla bloqueada. La app muestra los permisos que Android permite consultar; no afirma conocer el estado de los ajustes específicos de HyperOS.
+
+## Entrenamiento de la versión 0.9.0
+
+Los descansos y las series cronometradas iniciados desde Entrenar tienen un aviso propio de Android que funciona con la pantalla bloqueada o la app en segundo plano. Se requiere activar notificaciones y Alarmas y recordatorios; el canal «Entrenamiento · tono suave» usa el ding y el volumen de alarmas, sin cambiar el tono del despertador. También se programa el fin previsto del bloque del gimnasio, con interruptor propio en Alarmas. Ver [funcionamiento y límites](TRAINING.md).
+
+Prueba en el teléfono: iniciar una sesión de hoy, elegir un descanso breve, bloquear la pantalla y esperar el ding. Repetir dejando Mi Vida en segundo plano. Pausar o saltar un segundo descanso debe cancelar ese aviso. Después comprobar una serie cronometrada y revisar el fin del bloque en la vista previa de Alarmas. Ninguna prueba debe marcar series por sí sola.
+
+GTD se retiró de la interfaz y del reporte. Los registros anteriores permanecen en los respaldos por compatibilidad; las listas de trabajo del día continúan en Mi Vida.
 
 ## Meditación de la versión 0.8.0
 

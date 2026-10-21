@@ -76,11 +76,10 @@ test('old and absent sections produce a useful report without inventing diary, m
   assert.match(report.markdown, /Energía elegida: Sin registrar/);
   assert.match(report.markdown, /No hay hábitos guardados/);
   assert.match(report.markdown, /No hay agenda activada/);
-  assert.match(report.markdown, /No hay acciones GTD guardadas/);
+  assert.doesNotMatch(report.markdown, /GTD/);
   assert.doesNotMatch(report.markdown, /0\/5/);
   const oldTask = buildWeeklyReport(backup({ tasks: { old: { title: 'Pendiente antiguo' } } }), '2026-10-12');
-  assert.match(oldTask.markdown, /### Entrada \(1\)/);
-  assert.match(oldTask.markdown, /Pendiente antiguo/);
+  assert.doesNotMatch(oldTask.markdown, /Pendiente antiguo|### Entrada/);
 });
 
 test('habit marks are exact dates for currently existing habits; no inference from blanks or deleted habits', () => {
@@ -149,18 +148,15 @@ test('agenda describes proposals and exact saved marks without asserting real sl
   assert.doesNotMatch(report.markdown, /Creatina tomada|Dormiste \d|horas dormidas:/);
 });
 
-test('GTD is a current snapshot, not weekly completions; trash and optional tasks are excluded', () => {
+test('retired GTD records stay out of weekly reports without mutating legacy backups', () => {
   const reportBackup = backup({
     tasks: { done: { id: 'done', title: 'Hecha en otra fecha', status: 'done', updatedAt: '2026-10-18T12:00:00Z' }, waiting: { id: 'waiting', title: 'Esperar respuesta', status: 'waiting', waitingFor: 'Respuesta del equipo', notes: 'Volver a consultar', projectId: 'p' }, trash: { id: 'trash', title: 'Elemento descartado privado', status: 'trash' } },
     projects: { p: { id: 'p', title: 'Proyecto actual', outcome: 'Resultado claro', archived: false } },
   });
+  const original=structuredClone(reportBackup);
   const report = buildWeeklyReport(reportBackup, '2026-10-18');
-  assert.match(report.markdown, /“Hecho” no significa “terminado durante esta semana”/);
-  assert.match(report.markdown, /Hecha en otra fecha/);
-  assert.match(report.markdown, /Respuesta del equipo/);
-  assert.match(report.markdown, /Resultado claro/);
-  assert.doesNotMatch(report.markdown, /Elemento descartado privado|2026-10-18T12:00:00Z/);
-  assert.doesNotMatch(buildWeeklyReport(reportBackup, '2026-10-18', { includeTasks: false }).markdown, /Hecha en otra fecha|Esperar respuesta|Proyecto actual/);
+  assert.doesNotMatch(report.markdown, /GTD|Hecha en otra fecha|Esperar respuesta|Proyecto actual|Respuesta del equipo|Resultado claro|Elemento descartado privado/);
+  assert.deepEqual(reportBackup,original,'Exportar no elimina los registros anteriores');
 });
 
 test('night advice belongs to the following morning, including the Monday outside the report range', () => {

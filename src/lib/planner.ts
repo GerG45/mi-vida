@@ -493,12 +493,18 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
 
   // Family ranges do not force a midnight wake-up. Fixed journeys and commitments do.
   const earliestFixed = events.filter(e => e.fixed && blocksTime(e) && e.kind !== 'family' && !e.id.startsWith('care-')).reduce((earliest, event) => Math.min(earliest, event.start), MINUTE_DAY);
-  // Prepare in time for 08:15 on an office-free Monday or 08:30 on Tuesday.
+  // Prepare in time for morning training; school journeys remain protected.
   // Actual school journeys, imported commitments and care still take precedence.
   const preferredMondayDeparture = 8 * 60 + 15 - s.gymTravelMin;
   const preferredTuesdayDeparture = 8 * 60 + 30 - s.gymTravelMin;
   const tuesdayTraining = weekday === 2 && s.gymDays.includes(2);
-  const preferredTrainingDeparture = skipPewen ? preferredMondayDeparture : tuesdayTraining ? preferredTuesdayDeparture : MINUTE_DAY;
+  const morningTraining = (weekday === 3 || weekday === 5) && s.gymDays.includes(weekday);
+  // The current model reserves the trip home after drop-off, then a separate gym trip.
+  // Do not infer an unconfigured direct route from the school to the gym.
+  const schoolJourneyEnd = events.find(event => event.id === 'school-back')?.end
+    ?? events.find(event => event.id === 'school-dropoff')?.end ?? 0;
+  const preferredMorningDeparture = Math.max(8 * 60 + 30 - s.gymTravelMin, schoolJourneyEnd);
+  const preferredTrainingDeparture = skipPewen ? preferredMondayDeparture : tuesdayTraining ? preferredTuesdayDeparture : morningTraining ? preferredMorningDeparture : MINUTE_DAY;
   const morningAnchor = Math.min(earliestFixed,preferredTrainingDeparture);
   const defaultWake = time(s.defaultWake, defaults.defaultWake);
   const breakfastDuration = s.breakfastInPreparation ? 0 : 20;
@@ -535,9 +541,11 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
 
   if (s.gymDays.includes(weekday) || skipPewen) {
     const duration = s.gymTravelMin * 2 + s.gymDurationMin + s.showerMin;
-    const preferred = skipPewen ? preferredMondayDeparture : tuesdayTraining ? preferredTuesdayDeparture : 1020;
-    const slot = findSlot(duration, Math.max(wakeTime + 30, 420), 1290, preferred, busy(true, true));
-    if (slot === undefined) warnings.push(`Entrenamiento: no hay un hueco real de ${duration} min fuera del cuidado de [PEQUE]. Elegí cobertura u otro día; no se superpuso con tus compromisos.`);
+    const preferred = skipPewen ? preferredMondayDeparture : tuesdayTraining ? preferredTuesdayDeparture : morningTraining ? preferredMorningDeparture : 1020;
+    const slot = findSlot(duration, Math.max(wakeTime + 30, 420, morningTraining ? preferredMorningDeparture : 0), morningTraining ? 12 * 60 : 1290, preferred, busy(true, true));
+    if (slot === undefined) warnings.push(morningTraining
+      ? `Entrenamiento: no hay un hueco real de ${duration} min por la mañana después del jardín, incluyendo ida, sesión, regreso y ducha. Revisá los compromisos o la cobertura de [PEQUE]; no se trasladó a la tarde ni se movieron tus horarios fijos.`
+      : `Entrenamiento: no hay un hueco real de ${duration} min fuera del cuidado de [PEQUE]. Elegí cobertura u otro día; no se superpuso con tus compromisos.`);
     else {
       if (skipPewen && slot !== preferred) {
         const wanted = {start:preferred,end:preferred+duration};
@@ -545,9 +553,10 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
         warnings.push(`Entrenamiento: las 08:15 no son posibles con ${schoolBlocks ? 'los viajes del jardín' : 'los compromisos y cuidados de hoy'}. Se ubicó a las ${formatTime(slot+s.gymTravelMin)}, con el traslado, la vuelta y la ducha completos.`);
       }
       if (tuesdayTraining && slot !== preferred) warnings.push(`Entrenamiento del martes: las 08:30 no son posibles con los compromisos y cuidados de hoy. Se ubicó a las ${formatTime(slot+s.gymTravelMin)}, con la sesión, los traslados y la ducha completos.`);
+      if (morningTraining && slot !== preferred) warnings.push(`Entrenamiento del ${weekday === 3 ? 'miércoles' : 'viernes'}: después del jardín, los compromisos de hoy permiten empezar a las ${formatTime(slot+s.gymTravelMin)}. Se conserva la mañana con la sesión, los traslados y la ducha completos.`);
       let cursor = slot;
       push('gym-out', 'Ir a entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de ida.`, false);
-      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.' : tuesdayTraining ? 'Martes: preferencia a las 08:30, antes de la tanda de cocina y respetando tus compromisos. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.' : 'Bloque de entrenamiento. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.', false);
+      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.' : tuesdayTraining ? 'Martes: preferencia a las 08:30, antes de la tanda de cocina y respetando tus compromisos. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.' : morningTraining ? `${weekday === 3 ? 'Miércoles' : 'Viernes'} por la mañana: después de la entrega en el jardín y el regreso a casa cuando te corresponden. Preferencia a las 08:30, ajustada a los traslados reales. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.` : 'Bloque de entrenamiento. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.', false);
       push('gym-back', 'Volver de entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de regreso.`, false);
       push('gym-shower', 'Ducha y cambio', cursor, cursor + s.showerMin, 'personal', `${s.showerMin} min después de entrenar.`, false);
     }

@@ -8,7 +8,6 @@ import type { CalendarEventOccurrence } from './calendarModel';
 export type ReportWeek = { start: string; end: string; dates: string[] };
 export type WeeklyReportOptions = {
   includeName?: boolean;
-  includeTasks?: boolean;
   includePlanDetails?: boolean;
 };
 export type WeeklyReport = {
@@ -86,7 +85,7 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
     '- La agenda se reconstruye con los ajustes y excepciones actuales: no es una fotografía histórica ni una medición de lo que hice. Un cambio posterior de horario también puede cambiar esta reconstrucción.',
     '- Despertar y acostarse son horarios propuestos. No son horas reales de sueño ni permiten calcular cuánto dormí.',
     '- Las marcas de bloques no guardan la hora real ni la duración de ejecución. Marcar el desayuno no confirma por separado haber tomado creatina.',
-    '- Los hábitos y el estado de GTD corresponden a lo que existe al exportar. No hay historial de altas, cambios de estado o fechas de finalización.',
+    '- Los hábitos corresponden a lo que existe al exportar. No hay historial de altas, cambios de estado o fechas de finalización.',
     '- No se agregan domicilios, enlaces de ubicación ni configuración de acceso. Mi escritura puede contener otros datos personales y conviene revisarla antes de compartir.', '',
     '## Registros disponibles', '',
     `- Días con escritura, ánimo o energía registrados: **${journalDays} de 7**.`,
@@ -170,43 +169,11 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
   const training=trainingReport(sections.gymSessions,week.dates,created.getTime(),inline,quote);
   lines.push(...training.lines);
 
-  if (options.includeTasks !== false) {
-    lines.push('## GTD · estado actual al exportar', '',
-      'Esta sección muestra el estado actual de mis pendientes y proyectos, aunque hayan sido creados antes o después de la semana elegida. “Hecho” no significa “terminado durante esta semana”: no hay fecha de finalización guardada. La papelera queda fuera del reporte.', '');
-    const knownStatuses = ['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'trash'];
-    const tasks = values(sections.tasks).filter(task => string(task.title) && task.status !== 'trash')
-      .map(task => ({ ...task, status: knownStatuses.includes(string(task.status)) ? task.status : 'inbox' } as Data));
-    const projects = values(sections.projects).filter(project => string(project.title));
-    const statuses = [['inbox', 'Entrada'], ['next', 'Próximas acciones'], ['waiting', 'En espera'], ['someday', 'Algún día'], ['reference', 'Referencia'], ['done', 'Hecho · estado actual']] as const;
-    if (!tasks.length) lines.push('No hay acciones GTD guardadas fuera de la papelera.', '');
-    for (const [status, title] of statuses) {
-      const group = tasks.filter(task => task.status === status);
-      if (!group.length) continue;
-      lines.push(`### ${title} (${group.length})`, '');
-      for (const task of group) {
-        const project = projects.find(item => item.id === task.projectId);
-        lines.push(`- **${inline(task.title)}**${string(task.context) ? ` · ${inline(task.context)}` : ''}${validDate(string(task.due)) ? ` · Fecha objetivo: ${inline(task.due)}` : ''}${project ? ` · Proyecto actual: ${inline(project.title)}` : ''}.`);
-        const energy = ({ low: 'baja', medium: 'media', high: 'alta' } as Record<string, string>)[string(task.energy)];
-        const minutes = typeof task.minutes === 'number' && Number.isFinite(task.minutes) && task.minutes > 0 ? task.minutes : undefined;
-        if (minutes !== undefined || energy) lines.push(`  ${[minutes !== undefined && `Duración estimada actual: ${minutes} min`, energy && `Energía requerida elegida: ${energy}`].filter(Boolean).join(' · ')}.`);
-        if (string(task.waitingFor)) lines.push(`  Espero de: ${inline(task.waitingFor)}.`);
-        if (string(task.notes)) lines.push('', quote(task.notes), '');
-      }
-      lines.push('');
-    }
-    const activeProjects = projects.filter(project => project.archived !== true);
-    lines.push('### Proyectos activos al exportar', '');
-    if (!activeProjects.length) lines.push('Sin proyectos activos guardados.', '');
-    for (const project of activeProjects) {
-      lines.push(`- **${inline(project.title)}**${string(project.outcome) ? ` · Resultado buscado: ${inline(project.outcome)}` : ''}.`);
-    }
-    lines.push('');
-  }
   lines.push('## Para conversar y ajustar la próxima semana', '',
     '1. ¿Qué cosas del diario me dieron calma, energía o satisfacción? ¿Qué situaciones se repitieron?',
     '2. ¿Qué bloques del plan quedaron demasiado ajustados, se superpusieron o dependían de tiempos todavía estimados?',
     '3. ¿Qué hábito fue fácil de empezar y qué señal o paso pequeño convendría adaptar?',
-    '4. ¿Qué pendientes necesitan una próxima acción más concreta, una espera explícita o dejar de ser prioridad?',
+    '4. ¿Qué lista de trabajo necesita pasos más claros o menos carga para el tiempo disponible?',
     '5. ¿Qué único cambio pequeño quiero probar la próxima semana y qué voy a registrar para saber si me ayudó?', '',
     'Al analizar, separar hechos registrados, hipótesis y datos que faltan. Proponer ajustes concretos sin convertir los espacios vacíos en fallas ni inferir diagnósticos.', '',
   );

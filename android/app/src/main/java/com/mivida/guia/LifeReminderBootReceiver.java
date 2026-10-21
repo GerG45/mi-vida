@@ -21,5 +21,7 @@ public class LifeReminderBootReceiver extends BroadcastReceiver {
             LifeReminderScheduler.error(context, "No se pudieron restaurar las alarmas. Abrí Mi Vida y revisá los permisos.");
             Log.e("MiVidaReminders", "No se pudieron restaurar los recordatorios", error);
         }
+        try { LifeTrainingTimerScheduler.restore(context); }
+        catch (RuntimeException error) { Log.e("MiVidaTraining", "No se pudieron restaurar los temporizadores del entrenamiento", error); }
     }
 }

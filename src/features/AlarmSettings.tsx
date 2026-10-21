@@ -8,7 +8,7 @@ export type AlarmSettingsProps = {settings:Settings;overrides:Record<string,DayO
 const dateTime = (epoch:number) => new Date(epoch).toLocaleString('es-AR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 const dateLabel = (date:string) => new Date(date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'long'});
 const errorText = (error:unknown) => error instanceof Error ? error.message : 'Android no pudo completar la operación. Volvé a abrir Mi Vida y revisá los permisos.';
-const alarmLabel = (alarm:AlarmPreview) => alarm.source === 'bedtime-prepare' ? 'Preparación para dormir · 45 min antes' : alarm.source === 'bedtime' ? 'Hora de acostarte' : alarm.kind === 'wake' ? 'Alarma para despertar' : 'Recordatorio';
+const alarmLabel = (alarm:AlarmPreview) => alarm.source === 'bedtime-prepare' ? 'Preparación para dormir · 45 min antes' : alarm.source === 'bedtime' ? 'Hora de acostarte' : alarm.source === 'training-end' ? 'Fin del bloque de entrenamiento' : alarm.kind === 'wake' ? 'Alarma para despertar' : 'Recordatorio';
 
 export function AlarmSettings({settings,overrides,extras,done,externalOccurrences,scope,cloudReady,hidden=false}:AlarmSettingsProps) {
   const native = isAndroidAlarms();
@@ -23,7 +23,7 @@ export function AlarmSettings({settings,overrides,extras,done,externalOccurrence
   const mounted = useRef(true);
   const batch = useMemo(() => buildAlarmBatch({settings,overrides,extras,done,externalOccurrences,preferences:prefs,now}),[settings,overrides,extras,done,externalOccurrences,prefs,now]);
   const signature = JSON.stringify(cloudReady ? batch.notifications : []);
-  const hasPreferences = prefs.wake || prefs.bedtime || prefs.agenda || prefs.creatine || prefs.custom.some(alarm => alarmEpoch(alarm.date,alarm.time)>now);
+  const hasPreferences = prefs.wake || prefs.bedtime || prefs.agenda || prefs.creatine || prefs.trainingEnd || prefs.custom.some(alarm => alarmEpoch(alarm.date,alarm.time)>now);
 
   useEffect(() => {mounted.current=true;return () => {mounted.current=false;};},[]);
   useEffect(() => {setSaved({scope,prefs:loadAlarmPreferences(scope)});setProgrammed(null);setMessage('');setError('');},[scope]);
@@ -98,7 +98,8 @@ export function AlarmSettings({settings,overrides,extras,done,externalOccurrence
         <label className="toggleline"><input type="checkbox" checked={prefs.bedtime} onChange={e=>changePrefs(current=>({...current,bedtime:e.target.checked}))}/><span><strong>Prepararme y acostarme</strong><small>Dos avisos diarios: 45 minutos antes y a la hora propuesta para acostarte, según el despertar del día siguiente y tus horas de descanso. Usan el sonido de recordatorio; tu despertador mantiene su sonido habitual.</small></span></label>
         <label className="toggleline"><input type="checkbox" checked={prefs.agenda} onChange={e=>changePrefs(current=>({...current,agenda:e.target.checked}))}/><span><strong>Recordarme los compromisos</strong><small>Los bloques marcados como listos no generan avisos.</small></span></label>
         <label className="toggleline"><input type="checkbox" checked={prefs.creatine} onChange={e=>changePrefs(current=>({...current,creatine:e.target.checked}))}/><span><strong>Creatina con el desayuno</strong><small>Un aviso al empezar el desayuno, incluso los días de descanso. Si ya lo marcaste como listo, no vuelve a avisar.</small></span></label>
-        {(prefs.wake || prefs.bedtime || prefs.agenda || prefs.creatine) && !settings.scheduleEnabled && <p className="alarm-warning">Tu agenda todavía está desactivada. Activala o importá tus horarios en Ajustes para generar estas alarmas.</p>}
+        <label className="toggleline"><input type="checkbox" checked={prefs.trainingEnd} onChange={e=>changePrefs(current=>({...current,trainingEnd:e.target.checked}))}/><span><strong>Avisar al terminar el bloque de entrenamiento</strong><small>Suena con el tono breve a la hora de fin prevista en tu agenda, incluso con la APK en segundo plano o el celular bloqueado. Es independiente de los avisos de compromisos y de los contadores de series y descansos. Si ya completaste el bloque, no vuelve a avisar.</small></span></label>
+        {(prefs.wake || prefs.bedtime || prefs.agenda || prefs.creatine || prefs.trainingEnd) && !settings.scheduleEnabled && <p className="alarm-warning">Tu agenda todavía está desactivada. Activala o importá tus horarios en Ajustes para generar estas alarmas.</p>}
         {prefs.creatine && !settings.breakfastCreatine && <p className="alarm-note">Activá la creatina de la rutina matinal en Ajustes para generar este aviso.</p>}
         {prefs.agenda && <><label className="field alarm-before"><span>Avisar antes · minutos</span><input type="number" min="0" max="60" value={prefs.beforeMin} onChange={e=>changePrefs(current=>({...current,beforeMin:Math.max(0,Math.min(60,Number(e.target.value)||0))}))}/></label><div className="alarm-categories">{alarmCategories.map(category=><label className="toggleline" key={category.value}><input type="checkbox" checked={prefs.categories.includes(category.value)} onChange={e=>changePrefs(current=>({...current,categories:e.target.checked?[...current.categories,category.value]:current.categories.filter(value=>value!==category.value)}))}/>{category.label}</label>)}</div></>}
       </fieldset>

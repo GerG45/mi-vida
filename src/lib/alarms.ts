@@ -6,9 +6,9 @@ import type { CalendarEventOccurrence } from './calendarModel';
 export type AlarmKind = 'wake' | 'reminder';
 export type DeviceAlarm = { id: string; title: string; date: string; time: string; kind: AlarmKind };
 export type AlarmCategory = 'travel' | 'school' | 'work' | 'recording' | 'gym' | 'personal' | 'family';
-export type AlarmPreferences = { wake: boolean; bedtime: boolean; agenda: boolean; creatine: boolean; beforeMin: number; categories: AlarmCategory[]; custom: DeviceAlarm[] };
+export type AlarmPreferences = { wake: boolean; bedtime: boolean; agenda: boolean; creatine: boolean; trainingEnd: boolean; beforeMin: number; categories: AlarmCategory[]; custom: DeviceAlarm[] };
 export type ScheduledAlarm = { id: number; at: number; title: string; body: string; kind: AlarmKind };
-export type AlarmPreview = ScheduledAlarm & { key: string; source: 'wake' | 'bedtime' | 'bedtime-prepare' | 'agenda' | 'creatine' | 'custom' };
+export type AlarmPreview = ScheduledAlarm & { key: string; source: 'wake' | 'bedtime' | 'bedtime-prepare' | 'agenda' | 'creatine' | 'training-end' | 'custom' };
 export type AlarmBatch = { notifications: ScheduledAlarm[]; preview: AlarmPreview[]; through: string; omitted: number };
 export type AlarmPermissionStatus = { granted: boolean; notifications: boolean; exactAlarms: boolean; fullScreen: boolean; alarmVolume: number; alarmMaxVolume: number; pending: number; stored: number; nextAt: number | null; lastError: string | null };
 export interface LifeRemindersPlugin {
@@ -28,7 +28,7 @@ export const alarmCategories: { value: AlarmCategory; label: string }[] = [
   {value:'travel',label:'Salidas y traslados'}, {value:'school',label:'Jardín'}, {value:'work',label:'Trabajo y ensayos'},
   {value:'recording',label:'Grabaciones'}, {value:'gym',label:'Entrenamiento'}, {value:'personal',label:'Personales'}, {value:'family',label:'Familia y danza'},
 ];
-export function defaultAlarmPreferences(): AlarmPreferences { return {wake:false,bedtime:false,agenda:false,creatine:false,beforeMin:10,categories:alarmCategories.map(c => c.value),custom:[]}; }
+export function defaultAlarmPreferences(): AlarmPreferences { return {wake:false,bedtime:false,agenda:false,creatine:false,trainingEnd:true,beforeMin:10,categories:alarmCategories.map(c => c.value),custom:[]}; }
 export function alarmEpoch(date: string, time: string): number {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return NaN;
   const [year,month,day] = date.split('-').map(Number), [hour,minute] = time.split(':').map(Number);
@@ -41,6 +41,8 @@ export function normalizeAlarmPreferences(raw: unknown): AlarmPreferences {
   const value = raw as Partial<AlarmPreferences>;
   return {
     wake:value.wake === true, bedtime:value.bedtime === true, agenda:value.agenda === true, creatine:value.creatine === true,
+    // The requested training-end reminder is enabled for existing installations; a later opt-out persists.
+    trainingEnd:typeof value.trainingEnd === 'boolean' ? value.trainingEnd : defaults.trainingEnd,
     beforeMin:typeof value.beforeMin === 'number' && Number.isFinite(value.beforeMin) ? Math.max(0,Math.min(60,Math.round(value.beforeMin))) : defaults.beforeMin,
     categories:Array.isArray(value.categories) ? [...new Set(value.categories.filter((category): category is AlarmCategory => alarmCategories.some(c => c.value === category)))] : defaults.categories,
     custom:Array.isArray(value.custom) ? value.custom.filter((item): item is DeviceAlarm => !!item && typeof item === 'object' && typeof item.id === 'string' && item.id.length > 0 && item.id.length < 150 && typeof item.title === 'string' && item.title.trim().length > 0 && item.title.length <= 100 && Number.isFinite(alarmEpoch(item.date,item.time)) && (item.kind === 'wake' || item.kind === 'reminder')).slice(0,30) : [],
@@ -80,12 +82,16 @@ export function buildAlarmBatch({settings,overrides = {},extras = [],done = {},p
     if(inWindow(prepareAt))push(`bedtime-prepare:${night.wakeDate}`,prepareAt,'Prepararte para dormir',`En ${BEDTIME_PREPARATION_MINUTES} min, a las ${formatTime(night.bedtime)}, es tu hora propuesta para acostarte. Empezá a bajar el ritmo y dejá listo lo de mañana. Despertar del ${wakeDay}: ${formatTime(night.wakeTime)}.`,'reminder','bedtime-prepare');
     if(inWindow(bedtimeAt))push(`bedtime:${night.wakeDate}`,bedtimeAt,'Hora de ir a dormir',`Hora propuesta para acostarte: ${formatTime(night.bedtime)}. Para levantarte el ${wakeDay} a las ${formatTime(night.wakeTime)} y reservar ${night.sleepHours} h de descanso.${night.conflicts.length ? ' Hay compromisos después de esa hora; revisá la agenda.' : ''}`,'reminder','bedtime');
   }
-  if (settings.scheduleEnabled === true && (prefs.wake || prefs.agenda || prefs.creatine)) for (let offset=0;offset<14;offset++) {
+  if (settings.scheduleEnabled === true && (prefs.wake || prefs.agenda || prefs.creatine || prefs.trainingEnd)) for (let offset=0;offset<14;offset++) {
     const date = addDays(today,offset), plan = buildDay(date,settings,overrides,extras,externalOccurrences);
     if (prefs.wake) push(`wake:${date}`,alarmEpoch(date,formatTime(plan.wakeTime)),'Hora de levantarte',`Tu agenda de hoy empieza despertando a las ${formatTime(plan.wakeTime)}.`,'wake','wake');
     if (prefs.creatine && settings.breakfastCreatine === true) {
       const breakfast = plan.events.find(event => event.id === 'meal-breakfast');
       if (breakfast && !done[date+':'+breakfast.id]) push(`creatine:${date}`,alarmEpoch(date,formatTime(breakfast.start)),'Creatina con el desayuno','Tu recordatorio de cada mañana: tomar creatina junto con el desayuno.','reminder','creatine');
+    }
+    if (prefs.trainingEnd && !done[date+':gym']) {
+      const training = plan.events.find(event => event.id === 'gym' && event.source !== 'google');
+      if (training) push(`training-end:${date}`,alarmEpoch(date,formatTime(training.end)),'Fin del bloque de entrenamiento',`Son las ${formatTime(training.end)}: termina tu bloque previsto de entrenamiento (${formatTime(training.start)}–${formatTime(training.end)}). Cerrá tu sesión cuando estés listo; este aviso no marca series ni el entrenamiento como realizados.`,'reminder','training-end');
     }
     if (prefs.agenda) for (const event of plan.events) {
       if (event.source === 'google' || event.id.startsWith('care-') || done[date+':'+event.id] || !prefs.categories.includes(event.kind as AlarmCategory)) continue;

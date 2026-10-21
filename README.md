@@ -9,7 +9,6 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 ## Qué incluye
 
 - Agenda que calcula el despertar a partir del primer compromiso, la preparación y los viajes, y cuándo acostarse para despertar al día siguiente. Alternancia familiar de dos semanas, excepciones por fecha y detección de cruces.
-- Bandeja GTD, próximas acciones, proyectos, esperas, algún día, referencia y revisión semanal. Sólo se agenda una acción cuando elegís fecha y hora.
 - Listas de Trabajo / proyectos por fecha: prepararlas con anticipación o durante el bloque, completar checks y asignar minutos opcionales a cada paso. Cronómetro con pausa, edición, orden y recuperación de tareas quitadas. Los registros se sincronizan y entran en el reporte semanal.
 - Diario de mañana, cierre y escritura libre, con historial, búsqueda y reporte semanal descargable para revisar tus registros.
 - Hábitos con señal y versión mínima, sin penalizar una pausa.
@@ -24,6 +23,7 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 - Conexión opcional con Google Calendar: consultar compromisos y publicar bloques en un calendario separado, con revisión previa. Ver [activación y límites](docs/GOOGLE-CALENDAR.md).
 - Compras de súper en una sección independiente: productos, cantidades, categorías y checks, guardados por cuenta sin depender de la fecha explorada ni del meal prep.
 - Descanso en Android: dos avisos diarios, 45 minutos antes y a la hora propuesta para acostarte, adaptados al despertar siguiente. Conservan el sonido del despertador; usan el tono de recordatorio.
+- Entrenamiento de miércoles y viernes por la mañana, después del jardín. En Android, avisos de descansos y series cronometradas con la pantalla bloqueada y un aviso independiente al terminar el bloque previsto del gimnasio. Ver [horarios, permisos y prueba en el teléfono](docs/TRAINING.md).
 
 La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS breves. La preferencia del sistema de reducir movimiento desactiva las animaciones y transiciones. Los cambios visuales conservan las herramientas y los datos existentes.
 
@@ -71,6 +71,7 @@ El repositorio contiene el código de la herramienta. El diario y la agenda pers
 - *La riqueza que el dinero no puede comprar*, Robin Sharma: salud, vínculos, aprendizaje y contribución.
 - *El club de las 5 de la mañana*, Robin Sharma: reservar tiempo para uno mismo; el horario de despertar se adapta a los compromisos reales.
 - *Obras completas*, volúmenes I y II, Silo: experiencia de paz, atención, coherencia y reflexión sobre la acción. Guía adaptada y fuentes en [meditación diaria](docs/MEDITATION.md).
-- [Los cinco pasos de GTD](https://gettingthingsdone.com/what-is-gtd/), David Allen Company. Esta web es una implementación independiente y no está afiliada a los autores.
+
+La sección GTD fue retirada de la navegación y los reportes. Las listas de Trabajo / proyectos siguen disponibles dentro de los bloques del día. Los registros antiguos de GTD se conservan únicamente por compatibilidad de sincronización y respaldos, sin interfaz de edición.
 
 Las comidas y los ejercicios son contenido de referencia. Agendar un entrenamiento diario no equivale a prescribir siete sesiones de fuerza.

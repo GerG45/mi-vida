@@ -11,7 +11,6 @@ const shortDate = (date: string): string => new Date(`${date}T12:00:00`).toLocal
 export function WeeklyReport({ selected, snapshot }: WeeklyReportProps) {
   const [anchor, setAnchor] = useState(() => getDefaultReportWeek(selected).start);
   const [includeName, setIncludeName] = useState(false);
-  const [includeTasks, setIncludeTasks] = useState(true);
   const [includePlanDetails, setIncludePlanDetails] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState('');
@@ -25,7 +24,7 @@ export function WeeklyReport({ selected, snapshot }: WeeklyReportProps) {
     setExporting(true);
     try {
       // Read once at the click: writes made just before exporting belong in the report.
-      const report = buildWeeklyReport(snapshot(), week.start, { includeName, includeTasks, includePlanDetails });
+      const report = buildWeeklyReport(snapshot(), week.start, { includeName, includePlanDetails });
       const exported = await exportTextFile(report.filename, '\uFEFF' + report.markdown, 'text/markdown;charset=utf-8');
       if (!exported) { setMessage('Guardado cancelado. Tus registros siguen guardados en Mi Vida.'); return; }
       setMessage(`Reporte preparado: ${report.journalDays} días con registros de diario, ${report.habitMarks} marcas de hábitos, ${report.blockMarks} marcas de bloques, ${report.workItemMarks} de ${report.workItems} ítems de trabajo con check y ${report.trainingSessions} sesiones con series de entrenamiento registradas. Abrí el archivo descargado para revisarlo antes de compartirlo.`);
@@ -47,10 +46,9 @@ export function WeeklyReport({ selected, snapshot }: WeeklyReportProps) {
         <button className="icon-button" type="button" aria-label="Semana siguiente del reporte" onClick={() => { setAnchor(addDays(week.start, 7)); setMessage(''); }}>›</button></div></div>
     <details className="weekly-report-options"><summary>Qué contiene y opciones del archivo</summary>
       <p>Incluye las siete páginas del diario, ánimo y energía registrados, hábitos, agenda, listas de trabajo por fecha y entrenamientos: series reales, cargas, aproximaciones, tiempos, RPE, molestias y notas. Las listas separan checks, minutos estimados y cronómetro. Distingue lo registrado de los horarios propuestos.</p>
-      <label className="toggleline"><input type="checkbox" checked={includeTasks} onChange={event => setIncludeTasks(event.target.checked)} />Incluir mis pendientes y proyectos GTD actuales</label>
       <label className="toggleline"><input type="checkbox" checked={includePlanDetails} onChange={event => setIncludePlanDetails(event.target.checked)} />Agregar las explicaciones de cada bloque de la agenda</label>
       <label className="toggleline"><input type="checkbox" checked={includeName} onChange={event => setIncludeName(event.target.checked)} />Incluir mi nombre</label>
-      <p>GTD y la agenda reflejan los datos actuales. No hay historial de cambios que permita reconstruir con certeza cómo estaban en esa semana.</p>
+      <p>La agenda refleja los ajustes actuales. No hay historial de cambios que permita reconstruir con certeza cómo estaba en esa semana.</p>
     </details>
     <div className="weekly-report-actions"><button className="button primary" type="button" onClick={exportReport} disabled={exporting}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5" /></svg>{exporting ? 'Preparando reporte…' : 'Descargar reporte semanal'}</button>
       <span>Archivo de texto .md · se prepara en este dispositivo</span></div>

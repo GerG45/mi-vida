@@ -18,7 +18,8 @@ async function api(plugin={}) {
 const alarms=await api();
 const settings = {...planner.defaults,scheduleEnabled:true,familyConfirmed:true,cordobaConfirmed:true,recordingConfirmed:true,preparationConfirmed:true};
 const localEpoch = (day,hour=0,minute=0) => new Date(2026,9,day,hour,minute).getTime();
-const prefs = patch => ({...alarms.defaultAlarmPreferences(),...patch});
+// Existing cases isolate the alarm type under test; training-end has its own enabled-by-default cases below.
+const prefs = patch => ({...alarms.defaultAlarmPreferences(),trainingEnd:false,...patch});
 
 test('alarma del lunes B usa el despertar calculado de las 06:45',()=>{
   const batch=alarms.buildAlarmBatch({settings,preferences:prefs({wake:true}),now:localEpoch(19)});
@@ -221,6 +222,106 @@ test('ajustes locales separados por cuenta y valores importados estrictos',()=>{
   const invalid=alarms.normalizeAlarmPreferences({wake:'true',bedtime:'true',agenda:1,creatine:'true',beforeMin:1000,categories:['care','work'],custom:[{id:'x',title:'Imposible',date:'2026-02-31',time:'10:00',kind:'wake'}]});
   assert.equal(invalid.wake,false);assert.equal(invalid.bedtime,false);assert.equal(invalid.agenda,false);assert.equal(invalid.creatine,false);assert.equal(invalid.beforeMin,60);
   assert.deepEqual(invalid.categories,['work']);assert.deepEqual(invalid.custom,[]);
+});
+
+test('el aviso de fin de entrenamiento se activa en ajustes anteriores y conserva una desactivación explícita por cuenta',()=>{
+  const items=new Map();globalThis.localStorage={getItem:key=>items.get(key)||null,setItem:(key,value)=>items.set(key,value)};
+  const key=scope=>'mi-vida.device-alarms.v1.'+encodeURIComponent(scope);
+  const previous={wake:true,bedtime:false,agenda:false,creatine:true,beforeMin:7,categories:['work'],custom:[],bedtimeRoutineVersion:1};
+  items.set(key('project:old'),JSON.stringify(previous));
+  const loaded=alarms.loadAlarmPreferences('project:old',true);
+  assert.equal(alarms.defaultAlarmPreferences().trainingEnd,true);
+  assert.equal(loaded.trainingEnd,true);
+  assert.equal(loaded.wake,true);assert.equal(loaded.bedtime,false);assert.equal(loaded.creatine,true);
+  assert.equal(loaded.beforeMin,7);assert.deepEqual(loaded.categories,['work']);
+  alarms.saveAlarmPreferences('project:old',{...loaded,trainingEnd:false});
+  assert.equal(alarms.loadAlarmPreferences('project:old',true).trainingEnd,false);
+  assert.equal(alarms.loadAlarmPreferences('project:new',false).trainingEnd,true);
+  assert.equal(alarms.normalizeAlarmPreferences({trainingEnd:false}).trainingEnd,false);
+  assert.equal(alarms.normalizeAlarmPreferences({trainingEnd:'false'}).trainingEnd,true);
+  assert.equal(alarms.normalizeAlarmPreferences({trainingEnd:0}).trainingEnd,true);
+});
+
+test('el fin de entrenamiento usa el fin de cada bloque real durante 14 días, sin agenda, categorías ni adelanto',()=>{
+  const now=localEpoch(19),preferences=alarms.defaultAlarmPreferences(),config={...settings,gymDays:[2,3,4,5,6]};
+  preferences.categories=[];preferences.beforeMin=60;
+  const batch=alarms.buildAlarmBatch({settings:config,preferences,now});
+  const expected=[];
+  for(let offset=0;offset<14;offset++) {
+    const date=planner.addDays('2026-10-19',offset);
+    const gym=planner.buildDay(date,config,{},[]).events.find(event=>event.id==='gym');
+    if(gym)expected.push({date,gym});
+  }
+  assert(expected.length>0);
+  assert.equal(batch.preview.length,expected.length);
+  assert.equal(batch.through,'2026-11-01');
+  for(const {date,gym} of expected) {
+    const alarm=batch.preview.find(value=>value.key===`training-end:${date}`);
+    assert(alarm,date);
+    assert.equal(alarm.source,'training-end');assert.equal(alarm.kind,'reminder');
+    assert.equal(alarm.at,alarms.alarmEpoch(date,planner.formatTime(gym.end)));
+    assert.match(alarm.body,new RegExp(planner.formatTime(gym.end)));
+    assert.match(alarm.body,/no marca series ni el entrenamiento/);
+  }
+  assert(!batch.preview.some(alarm=>alarm.key==='training-end:2026-10-19'));
+  assert(!batch.preview.some(alarm=>alarm.key==='training-end:2026-10-25'));
+});
+
+test('el fin de entrenamiento respeta el bloque completado, el reloj y los dos interruptores',()=>{
+  const now=localEpoch(21),preferences=prefs({trainingEnd:true});
+  const before=alarms.buildAlarmBatch({settings,preferences,now});
+  const alarm=before.preview.find(value=>value.key==='training-end:2026-10-21');
+  assert(alarm);
+  const completed=alarms.buildAlarmBatch({settings,preferences,now,done:{'2026-10-21:gym':true}});
+  assert(!completed.preview.some(value=>value.key===alarm.key));
+  assert.deepEqual(completed.preview,before.preview.filter(value=>value.key!==alarm.key));
+  const pending=alarms.buildAlarmBatch({settings,preferences,now,done:{'2026-10-21:gym':false}});
+  assert(pending.preview.some(value=>value.key===alarm.key));
+  const elapsed=alarms.buildAlarmBatch({settings,preferences,now:alarm.at});
+  assert(!elapsed.preview.some(value=>value.key===alarm.key));
+  for(const options of [
+    {settings,preferences:{...preferences,trainingEnd:false}},
+    {settings:{...settings,scheduleEnabled:false},preferences},
+    {settings:{...settings,gymDays:[]},preferences},
+  ])assert.equal(alarms.buildAlarmBatch({...options,now}).notifications.length,0);
+});
+
+test('el fin de entrenamiento se acomoda a los compromisos y desaparece si no entra un bloque por la mañana',()=>{
+  const date='2026-10-21',now=localEpoch(21),preferences=prefs({trainingEnd:true});
+  const overrides={[date]:{care:'other',dropoff:'other',pickup:'other'}};
+  const initial=alarms.buildAlarmBatch({settings,overrides,preferences,now}).preview.find(alarm=>alarm.key===`training-end:${date}`);
+  const extras=[{id:'morning-appointment',title:'Turno de la mañana',date,startHHmm:'08:15',durationMin:90,travelMin:0,kind:'personal'}];
+  const gym=planner.buildDay(date,settings,overrides,extras).events.find(event=>event.id==='gym');
+  assert(gym);
+  const changed=alarms.buildAlarmBatch({settings,overrides,extras,preferences,now}).preview.find(alarm=>alarm.key===`training-end:${date}`);
+  assert.equal(changed.at,alarms.alarmEpoch(date,planner.formatTime(gym.end)));
+  assert.notEqual(changed.at,initial.at);assert.equal(changed.id,initial.id);
+  const blocked=[{...extras[0],startHHmm:'00:00',durationMin:720}];
+  assert(!planner.buildDay(date,settings,overrides,blocked).events.some(event=>event.id==='gym'));
+  assert(!alarms.buildAlarmBatch({settings,overrides,extras:blocked,preferences,now}).preview.some(alarm=>alarm.key===initial.key));
+});
+
+test('el aviso de fin no duplica el de inicio y mantiene ID al cambiar duración',()=>{
+  const preferences=prefs({trainingEnd:true,agenda:true,beforeMin:10}),now=localEpoch(21);
+  const batch=alarms.buildAlarmBatch({settings,preferences,now});
+  const end=batch.preview.find(alarm=>alarm.key==='training-end:2026-10-21');
+  const start=batch.preview.find(alarm=>alarm.key==='agenda:2026-10-21:gym');
+  assert(end&&start);assert.notEqual(end.id,start.id);assert(end.at>start.at);
+  assert.equal(batch.preview.filter(alarm=>alarm.key===end.key).length,1);
+  const changed=alarms.buildAlarmBatch({settings:{...settings,gymDurationMin:settings.gymDurationMin+5},preferences,now}).preview.find(alarm=>alarm.key===end.key);
+  assert.equal(changed.id,end.id);assert.equal(changed.at,end.at+5*60000);
+});
+
+test('los fines de entrenamiento conservan el cupo de 200 y no desplazan despertadores ni las dos fases de sueño',()=>{
+  const extras=Array.from({length:30},(_,index)=>({id:`extra-${index}`,title:`Evento ${index}`,days:[0,1,2,3,4,5,6],startHHmm:'12:00',durationMin:5,travelMin:0,kind:'personal'}));
+  const preferences=prefs({trainingEnd:true,wake:true,bedtime:true,agenda:true,custom:[{id:'far',title:'Puntual',date:'2027-01-01',time:'10:00',kind:'wake'}]});
+  const full=alarms.buildAlarmBatch({settings,extras,preferences,now:localEpoch(19)});
+  const protectedBatch=alarms.buildAlarmBatch({settings,extras,preferences:{...preferences,trainingEnd:false,agenda:false},now:localEpoch(19)});
+  assert.equal(full.notifications.length,200);assert(full.omitted>0);
+  for(const expected of protectedBatch.preview) {
+    const actual=full.preview.find(alarm=>alarm.key===expected.key);
+    assert(actual,expected.key);assert.equal(actual.at,expected.at);assert.equal(actual.id,expected.id);
+  }
 });
 
 test('una programación anterior pendiente no gana al cambiar de cuenta',async()=>{
