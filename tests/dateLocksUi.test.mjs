@@ -35,6 +35,7 @@ async function sourceUrl(filename) {
 
 const {WorkChecklist}=await import(await sourceUrl(fileURLToPath(new URL('../src/features/WorkChecklist.tsx',import.meta.url))));
 const {JournalView,HabitsView,emptyJournalEntry}=await import(await sourceUrl(fileURLToPath(new URL('../src/features/Journal.tsx',import.meta.url))));
+const {MeditationCard}=await import(await sourceUrl(fileURLToPath(new URL('../src/features/Meditation.tsx',import.meta.url))));
 const fixedNow=new Date(2026,9,19,12).getTime();
 const noop=()=>{};
 function render(Component,props){
@@ -44,6 +45,25 @@ function render(Component,props){
 const tag=(html,pattern)=>html.match(pattern)?.[0]??'';
 const item=date=>({id:'one',date,blockId:'flex-work',title:'Preparar propuesta',done:false,estimatedMinutes:30,createdAt:100,completedAt:null,order:0,elapsedSeconds:0,timerStartedAt:null});
 const workProps=date=>({date,block:{id:'flex-work-0',kind:'work',title:'Trabajo / proyectos',start:600,end:660},items:{one:item(date)},setItems:noop,onClose:noop});
+
+test('la meditación se puede leer en cualquier fecha pero registrar y deshacer sólo hoy',()=>{
+  for(const date of ['2026-10-18','2026-10-20']){
+    const pending=render(MeditationCard,{date,checks:{},setChecks:noop});
+    assert.match(pending,/Leer la práctica/);
+    assert.match(pending,/<button[^>]*disabled[^>]*>Ya medité/);
+    const complete=render(MeditationCard,{date,checks:{[`${date}:meditation`]:true},setChecks:noop});
+    assert.match(complete,/Registrada ese día/);
+    assert.match(complete,/<button[^>]*disabled[^>]*>Deshacer registro/);
+    assert.doesNotMatch(complete,/role="dialog"/,'La guía no se abre por explorar una fecha');
+  }
+  const pending=render(MeditationCard,{date:'2026-10-19',checks:{},setChecks:noop});
+  assert.match(pending,/Meditar ahora/);
+  assert.match(pending,/<button(?![^>]*disabled)[^>]*>Ya medité/);
+  assert.match(pending,/Sin horario fijo/);
+  const complete=render(MeditationCard,{date:'2026-10-19',checks:{'2026-10-19:meditation':true},setChecks:noop});
+  assert.match(complete,/Realizada hoy/);
+  assert.match(complete,/<button(?![^>]*disabled)[^>]*>Deshacer registro/);
+});
 
 test('listas futuras permiten preparar pasos pero sus checks y contadores quedan bloqueados',()=>{
   const html=render(WorkChecklist,workProps('2026-10-20'));

@@ -4,13 +4,17 @@ La APK incluye la interfaz dentro de la app: no necesita abrir la página en Chr
 
 ## Primera vez en el teléfono
 
-1. Instalar `Mi-Vida-0.7.1-debug.apk` encima de la versión anterior y abrir Mi Vida.
+1. Instalar `Mi-Vida-0.8.0-debug.apk` encima de la versión anterior y abrir Mi Vida.
 2. En **Ajustes**, entrar con la misma cuenta Google. Esperar a que aparezcan los horarios personales y el estado de la nube.
 3. En **Alarmas**, permitir notificaciones y alarmas exactas. La pantalla completa es un permiso adicional; también se puede detener o posponer desde la notificación.
 4. Revisar el volumen de alarmas y tocar **Probar alarma en 30 segundos**. Bloquear la pantalla y comprobar sonido, Detener y Posponer antes de usar el despertador de la agenda.
 5. Activar el despertar calculado, los recordatorios elegidos o una alarma puntual. Revisar la próxima alarma y el estado confirmado por Android.
 
 En Xiaomi/POCO, revisar el inicio automático y las restricciones de batería de Mi Vida si la prueba no funciona con la pantalla bloqueada. La app muestra los permisos que Android permite consultar; no afirma conocer el estado de los ajustes específicos de HyperOS.
+
+## Meditación de la versión 0.8.0
+
+«Un momento de paz» aparece en Mi día y Hábitos. La guía de seis pasos y «Ya medité» comparten una única marca por fecha, guardada por cuenta con Firebase y disponible en el reporte semanal. No agrega alarmas ni horarios. Ver [uso, datos y fuentes](MEDITATION.md).
 
 ## Descanso diario de la versión 0.7.1
 

@@ -9,6 +9,7 @@ android/local.properties
 *.log
 
 private/
+.codex-remote-attachments/
 APK/
 node_modules/
 output/

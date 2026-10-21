@@ -94,6 +94,24 @@ test('habit marks are exact dates for currently existing habits; no inference fr
   assert.doesNotMatch(report.markdown, /deleted/);
 });
 
+test('meditation reports only exact saved daily marks without inferring duration or guided sessions',()=>{
+  const report=buildWeeklyReport(backup({habitChecks:{
+    '2026-10-11:meditation':true,'2026-10-12:meditation':true,'2026-10-13:meditation':false,
+    '2026-10-18:meditation':true,'2026-10-19:meditation':true,'2026-10-14:other':true,
+  }}),'2026-10-18');
+  assert.match(report.markdown,/Días con práctica registrada en esta semana: \*\*2 de 7\*\*/);
+  const section=report.markdown.split('## Meditación · registros por fecha')[1].split('## Hábitos')[0];
+  assert.equal((section.match(/\| Práctica registrada \|/g)||[]).length,2);
+  assert.equal((section.match(/\| Sin registro \|/g)||[]).length,5);
+  assert.match(section,/2026-10-12 \| Práctica registrada/);
+  assert.match(section,/2026-10-13 \| Sin registro/);
+  assert.match(section,/ni registra minutos, hora de práctica o efectos/i);
+  assert.doesNotMatch(section,/2026-10-11|2026-10-19|10–15|racha de \d/);
+  assert.equal(report.habitMarks,0,'No agrega definiciones de hábitos al respaldo');
+  assert.doesNotMatch(buildWeeklyReport(backup({}),'2026-10-18').markdown,/## Meditación/,'Respaldos antiguos sin marcas no inventan historial');
+  assert.match(buildWeeklyReport(backup({habitChecks:{'2026-10-20:meditation':false}}),'2026-10-20').markdown,/\*\*0 de 7\*\*/,'Deshacer deja la semana sin registro');
+});
+
 test('all journal fields are preserved and blank entries do not count as registrations', () => {
   const report = buildWeeklyReport(backup({ journal: {
     '2026-10-12': { intention: 'Intención', gratitude: 'Gracias', smallStep: 'Paso', win: 'Logro', learned: 'Aprendizaje', letGo: 'Soltar', freeText: 'Primera línea\nSegunda línea', mood: 'En calma', energy: 4 },

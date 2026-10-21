@@ -107,6 +107,16 @@ export function buildWeeklyReport(backup: LifeBackup, date: string, options: Wee
     }
   }
 
+  if(Object.keys(checks).some(key=>/^\d{4}-\d{2}-\d{2}:meditation$/.test(key))) {
+    const meditationDays=week.dates.filter(day=>checks[`${day}:meditation`]===true).length;
+    lines.push('## Meditación · registros por fecha', '',
+      `- Días con práctica registrada en esta semana: **${meditationDays} de 7**.`,
+      '- La marca puede venir de «Ya medité» o del cierre explícito de la guía. No distingue entre ambas opciones ni registra minutos, hora de práctica o efectos.',
+      '- «Sin registro» no significa que no haya meditado. No se calculan rachas ni deudas.', '',
+      '| Fecha | Registro |', '| --- | --- |',
+      ...week.dates.map(day=>`| ${day} | ${checks[`${day}:meditation`]===true?'Práctica registrada':'Sin registro'} |`), '');
+  }
+
   lines.push('## Hábitos · marcas guardadas por fecha', '',
     'Se muestran los hábitos que existen ahora. “—” significa sin marca guardada. No hay registro de cuándo se creó cada hábito; no se calcula una tasa de cumplimiento.', '');
   if (!habits.length) lines.push('No hay hábitos guardados al exportar.', '');

@@ -30,6 +30,26 @@ async function store() {
 }
 const settings = {childName:'tu peque',scheduleEnabled:false,gymDays:[1,3,5],schoolStart:'07:45',preparationMin:20,sleepHours:8,anchorMonday:'2026-10-12'};
 
+test('meditación reutiliza habitChecks con respaldo, cola de sincronización y separación por cuenta',async t=>{
+  t.mock.method(Date,'now',()=>new Date(2026,9,20,12).getTime());
+  const s=await store();
+  const [,setChecks]=s.useLifeState('habitChecks',{});
+  s.setStoreScope('project:meditationA');
+  setChecks({'2026-10-20:meditation':true});
+  const backup=s.getLifeBackup();
+  assert.deepEqual(backup.sections.habitChecks,{'2026-10-20:meditation':true});
+  assert(s.getPendingRecords().some(record=>record.section==='habitChecks'&&record.key==='2026-10-20:meditation'));
+  s.setStoreScope('project:meditationB');
+  assert.deepEqual(s.getLifeBackup().sections.habitChecks,{});
+  s.restoreLifeBackup(backup);
+  assert.deepEqual(s.getLifeBackup().sections.habitChecks,{'2026-10-20:meditation':true});
+  setChecks({'2026-10-20:meditation':false});
+  assert.equal(s.getLifeBackup().sections.habitChecks['2026-10-20:meditation'],false);
+  s.setStoreScope('project:meditationA');
+  assert.equal(s.getLifeBackup().sections.habitChecks['2026-10-20:meditation'],true);
+  assert.deepEqual(s.getLifeBackup().sections.journal,undefined,'No escribe un diario a partir de una práctica');
+});
+
 test('las compras de súper se guardan por cuenta y no se mezclan con la lista del meal prep',async()=>{
   const s=await store();
   const [,setGroceries]=s.useLifeState('groceries',{});

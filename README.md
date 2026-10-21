@@ -13,7 +13,8 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 - Listas de Trabajo / proyectos por fecha: prepararlas con anticipación o durante el bloque, completar checks y asignar minutos opcionales a cada paso. Cronómetro con pausa, edición, orden y recuperación de tareas quitadas. Los registros se sincronizan y entran en el reporte semanal.
 - Diario de mañana, cierre y escritura libre, con historial, búsqueda y reporte semanal descargable para revisar tus registros.
 - Hábitos con señal y versión mínima, sin penalizar una pausa.
-- Ideas y reflexiones inspiradas en cuatro libros de James Clear y Robin Sharma, identificadas como redacción original; fuentes y páginas en la web.
+- Ideas y reflexiones inspiradas en James Clear, Robin Sharma y Silo, identificadas como redacción original; citas breves y fuentes con páginas en el diario.
+- Meditación diaria sin horario fijo: Experiencia de Paz en seis pasos, registro manual, historial por fecha y reporte semanal. Ver [uso, datos y fuentes](docs/MEDITATION.md).
 - Cocina por tandas y compras. Gimnasio integrado: las tres rutinas originales y sus cuatro semanas, sesiones guiadas, aproximaciones, cargas, repeticiones, tiempos y descansos; historial, RPE, molestias, notas y rutinas personalizadas.
 - Videos por variante de ejercicio, ilustraciones locales y seguimiento de cargas que recupera el último registro de la misma variante. Los entrenamientos registrados se incluyen en el reporte semanal.
 - Horarios fijos opcionales para las tandas del martes y viernes, y ensayo del lunes con regreso posterior configurable.
@@ -69,6 +70,7 @@ El repositorio contiene el código de la herramienta. El diario y la agenda pers
 - *El monje que vendió su Ferrari*, Robin Sharma: propósito, atención y cuidado personal.
 - *La riqueza que el dinero no puede comprar*, Robin Sharma: salud, vínculos, aprendizaje y contribución.
 - *El club de las 5 de la mañana*, Robin Sharma: reservar tiempo para uno mismo; el horario de despertar se adapta a los compromisos reales.
+- *Obras completas*, volúmenes I y II, Silo: experiencia de paz, atención, coherencia y reflexión sobre la acción. Guía adaptada y fuentes en [meditación diaria](docs/MEDITATION.md).
 - [Los cinco pasos de GTD](https://gettingthingsdone.com/what-is-gtd/), David Allen Company. Esta web es una implementación independiente y no está afiliada a los autores.
 
 Las comidas y los ejercicios son contenido de referencia. Agendar un entrenamiento diario no equivale a prescribir siete sesiones de fuerza.

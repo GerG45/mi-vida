@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { addDays } from '../lib/planner';
 import { books, getDailyInspiration, getDailyQuote, inspirations } from '../lib/inspiration';
 import {getDateAccess} from '../lib/datePolicy';
@@ -33,6 +33,7 @@ export type HabitsViewProps = {
   setHabits: Dispatch<SetStateAction<Record<string, Habit>>>;
   checks: Record<string, boolean>;
   setChecks: Dispatch<SetStateAction<Record<string, boolean>>>;
+  dailyPractice?: ReactNode;
 };
 
 export const emptyJournalEntry = (): JournalEntry => ({
@@ -118,6 +119,7 @@ export function JournalView({ selected, onDateChange, entries, setEntries }: Jou
           {inspirations.map(item => <option key={item.id} value={item.id}>{item.title} · {books.find(book => book.id === item.book)?.title}</option>)}
         </select></label>
         <p>Concepto parafraseado a partir de las páginas {inspiration.pages.join(', ')} del PDF adjunto ({source.pdfPages} páginas). Los números corresponden al archivo, no a la numeración impresa.</p>
+        {inspiration.sourceContext&&<p>{inspiration.sourceContext}</p>}
         <p>La reflexión y la pregunta fueron escritas para esta app. No son citas textuales del libro. Podés adaptar estas ideas a tus horarios y a tu descanso.</p>
       </details>
     </section>
@@ -126,6 +128,7 @@ export function JournalView({ selected, onDateChange, entries, setEntries }: Jou
       <p className="eyebrow">Del libro · cita textual</p>
       <blockquote>“{dailyQuote.quote}”</blockquote>
       <div className="journal-quote-source"><cite>{quoteBook.title} · {quoteBook.author}</cite><span>Página {dailyQuote.pages.join(', ')} del archivo de lectura</span></div>
+      {dailyQuote.sourceContext&&<p className="journal-attribution">{dailyQuote.sourceContext}</p>}
     </section>
 
     <div className="journal-grid"><section className="panel journal-writing">
@@ -169,7 +172,7 @@ export function JournalView({ selected, onDateChange, entries, setEntries }: Jou
   </div>;
 }
 
-export function HabitsView({ selected, habits, setHabits, checks, setChecks }: HabitsViewProps) {
+export function HabitsView({ selected, habits, setHabits, checks, setChecks, dailyPractice }: HabitsViewProps) {
   const access=useDateAccess(selected);
   const lockReason=access.kind==='past'?'Este día ya terminó. Sus hábitos quedan guardados para consultar.':'Podés explorar los hábitos; las marcas se habilitan cuando llegue esa fecha.';
   const [showForm, setShowForm] = useState(false);
@@ -204,6 +207,7 @@ export function HabitsView({ selected, habits, setHabits, checks, setChecks }: H
     <div className="habits-intro"><span aria-hidden="true">✳</span><div><h2>Hacelo fácil para poder volver.</h2><p>Elegí algo que ya suceda como señal y una versión de hasta dos minutos para empezar. Si un día no sale, podés retomar en la próxima oportunidad.</p></div></div>
     <div className="habits-date"><div><p className="eyebrow">{access.canExecute?'ESTÁS REGISTRANDO':'ESTÁS CONSULTANDO'}</p><strong>{dateLabel(selected)}</strong></div><span className="count-badge">{practiced} de {habitList.length} practicados</span></div>
     {!access.canExecute&&<p className="journal-date-lock" role="status"><span aria-hidden="true">◷</span>{lockReason}</p>}
+    {dailyPractice}
     {error&&!showForm&&<p className="habit-form-error" role="status">{error}</p>}
     {showForm && <form className="panel habit-form" onSubmit={createHabit}><div className="section-title"><div><p className="eyebrow">DISEÑÁ UN COMIENZO AMABLE</p><h2>Tu próximo hábito</h2></div></div>
       <label className="field"><span>¿Qué querés cultivar?</span><input value={name} maxLength={100} required onChange={event => setName(event.target.value)} placeholder="Ej. Leer un poco" /></label>

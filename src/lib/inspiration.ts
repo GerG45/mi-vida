@@ -1,12 +1,12 @@
 /**
- * Conceptos parafraseados de los cuatro PDF aportados por el usuario.
+ * Conceptos parafraseados de los seis PDF aportados por el usuario.
  * Las reflexiones, los títulos y las preguntas son redacción original para la app:
  * no deben mostrarse como citas textuales ni atribuirse literalmente a los autores.
- * `bookQuotes` contiene, por separado, cuatro citas breves verificadas literalmente.
+ * `bookQuotes` contiene, por separado, citas breves verificadas literalmente.
  * `pages` usa páginas del archivo PDF, contadas desde 1 y comprobadas con pypdf.
  * Los archivos originales no se incluyen en la web.
  */
-export type BookId = 'monje' | 'atomicos' | 'riqueza' | 'club';
+export type BookId = 'monje' | 'atomicos' | 'riqueza' | 'club' | 'silo-v1' | 'silo-v2';
 export type InspirationBook = { id: BookId; title: string; author: string; pdfPages: number; fileName: string };
 export type Inspiration = {
   id: string;
@@ -17,22 +17,29 @@ export type Inspiration = {
   idea: string;
   prompt: string;
   pages: number[];
+  sourceContext?: string;
 };
-export type BookQuote = { id: string; book: BookId; quote: string; pages: number[] };
+export type BookQuote = { id: string; book: BookId; quote: string; pages: number[]; sourceContext?: string };
 
 export const books: InspirationBook[] = [
   { id: 'monje', title: 'El monje que vendió su Ferrari', author: 'Robin Sharma', pdfPages: 128, fileName: 'EL-MONJE-QUE-VENDIO-SU-FERRARI-AUTOR-ROBIN-SHARMA.pdf' },
   { id: 'atomicos', title: 'Hábitos atómicos', author: 'James Clear', pdfPages: 207, fileName: 'Habitos-atomicos.pdf' },
   { id: 'riqueza', title: 'La riqueza que el dinero no puede comprar', author: 'Robin Sharma', pdfPages: 396, fileName: '_OceanofPDF.com_La_riqueza_que_el_dinero_no_puede_comprar_Spanish_Edition_-_Robin_Sharma.pdf' },
   { id: 'club', title: 'El club de las 5 de la mañana', author: 'Robin Sharma', pdfPages: 387, fileName: 'El_club_de_las_5_de_la_manana_Robin_Sharma.pdf' },
+  { id: 'silo-v1', title: 'Obras completas · Volumen I', author: 'Silo', pdfPages: 514, fileName: '3-Obras_completas_I.pdf' },
+  { id: 'silo-v2', title: 'Obras completas · Volumen II', author: 'Silo', pdfPages: 369, fileName: '2-Silo_OC2_es.pdf' },
 ];
 
 /** Fragmentos literales comprobados en los PDF; se normalizaron sólo espacios. */
 export const bookQuotes: BookQuote[] = [
   { id: 'monje-perseverancia', book: 'monje', quote: 'La perseverancia es la madre del cambio personal.', pages: [39] },
+  { id: 'silo-no-forzar', book: 'silo-v1', quote: 'Cuando fuerzas algo hacia un fin produces lo contrario.', pages: [23], sourceContext: 'Humanizar la Tierra · La mirada interna · XIII. Los Principios, principio 2' },
   { id: 'atomicos-semilla-literal', book: 'atomicos', quote: 'La semilla de cada hábito es una pequeña decisión.', pages: [18] },
+  { id: 'silo-atencion-literal', book: 'silo-v2', quote: 'La atención es una aptitud de la conciencia que permite observar los fenómenos internos y externos.', pages: [18], sourceContext: 'Apuntes de Psicología · Psicología I · 3. Conciencia · Atención, presencia y copresencia' },
   { id: 'riqueza-salud', book: 'riqueza', quote: 'La salud es un tipo de riqueza.', pages: [64] },
+  { id: 'silo-tiempo-paz', book: 'silo-v1', quote: 'En ella puedes permanecer el tiempo que te parezca adecuado.', pages: [26], sourceContext: 'Humanizar la Tierra · La mirada interna · XV. La experiencia de paz y el pasaje de la Fuerza, fragmento 2' },
   { id: 'club-descanso', book: 'club', quote: 'Trabajar sin descanso agota la grandeza.', pages: [331] },
+  { id: 'silo-accion-literal', book: 'silo-v2', quote: 'Está claro que no es indiferente la acción que se realiza en el mundo.', pages: [126], sourceContext: 'Apuntes de Psicología · Psicología III · 1. La acción en el mundo como forma transferencial' },
 ];
 
 export const inspirations: Inspiration[] = [
@@ -61,6 +68,12 @@ export const inspirations: Inspiration[] = [
     prompt: '¿Qué gesto al empezar el día te ayudaría a sentirte un poco más presente?', pages: [254, 261, 273],
   },
   {
+    id: 'silo-pausa-propia', book: 'silo-v1', title: 'Una pausa con tu tiempo', theme: 'Calma',
+    reflection: 'Podés hacer una pausa sin convertirla en otra cosa que tenés que lograr.',
+    idea: 'La experiencia de paz propone aquietarse, atender una imagen que pasa a sentirse en el pecho y concluir con calma. Esta adaptación toma el permiso de permanecer un rato, sin exigir una sensación especial.',
+    prompt: '¿Qué cambia cuando te regalás unos minutos sin pedirte un resultado?', pages: [26], sourceContext: 'La mirada interna · XV, fragmentos 1–2',
+  },
+  {
     id: 'monje-faro', book: 'monje', title: 'Una intención que oriente', theme: 'Propósito',
     reflection: 'Entre tantas cosas por resolver, podés elegir una que hoy tenga sentido para vos.',
     idea: 'El faro simboliza una dirección personal y prioridades claras. Una intención pequeña puede servir como referencia cuando aparecen pedidos, pendientes y distracciones.',
@@ -83,6 +96,12 @@ export const inspirations: Inspiration[] = [
     reflection: 'Un momento de quietud puede ayudarte a recordar cómo querés estar en el mundo hoy.',
     idea: 'La fase de reflexión invita a contemplar los propios valores, la manera de actuar y lo importante del día. Podés hacerlo escribiendo unas líneas en el horario que te resulte posible.',
     prompt: '¿Qué valor querés que se note en tu manera de trabajar, de cuidar y de hablar hoy?', pages: [261, 262],
+  },
+  {
+    id: 'silo-atender', book: 'silo-v2', title: 'Notar dónde estás', theme: 'Atención',
+    reflection: 'Hay un sonido, una sensación o un detalle de este momento al que podés acercarte despacio.',
+    idea: 'Silo distingue el foco de atención de lo que queda en su entorno. Para hoy, la propuesta es reconocer un detalle externo y una sensación propia, sin intentar atender a todo a la vez.',
+    prompt: '¿Qué notás a tu alrededor y qué registrás en vos al detenerte un momento?', pages: [18], sourceContext: 'Apuntes de Psicología · Psicología I · Atención, presencia y copresencia',
   },
   {
     id: 'monje-kaizen', book: 'monje', title: 'Mejorar una cosa pequeña', theme: 'Aprendizaje',
@@ -109,6 +128,12 @@ export const inspirations: Inspiration[] = [
     prompt: '¿Qué necesitás dejar escrito hoy, tal como te sale, antes de seguir con el día?', pages: [268],
   },
   {
+    id: 'silo-en-conjunto', book: 'silo-v1', title: 'Que tu día haga conjunto', theme: 'Coherencia',
+    reflection: 'Tu descanso, tu trabajo y tus vínculos también pueden ser parte de una misma decisión.',
+    idea: 'Los Principios invitan a considerar cómo se relacionan las cosas y qué actos dejan una sensación de unidad. La adaptación para tu agenda es revisar una elección junto con aquello que también querés cuidar.',
+    prompt: '¿Qué ajuste haría que lo que pensás, sentís y hacés se acerquen un poco más hoy?', pages: [23], sourceContext: 'La mirada interna · XIII. Los Principios, principios 4 y 12',
+  },
+  {
     id: 'monje-disciplina', book: 'monje', title: 'Una promesa posible', theme: 'Constancia',
     reflection: 'Una promesa chiquita que podés cuidar hoy también construye confianza en vos.',
     idea: 'El cable de muchos hilos representa pequeñas prácticas que se reúnen con el tiempo. Para esta app, la adaptación es elegir un compromiso que entre en tu realidad y volver a revisarlo cuando cambie.',
@@ -131,6 +156,12 @@ export const inspirations: Inspiration[] = [
     reflection: 'Guardá una pregunta abierta: puede acompañarte más lejos que una respuesta apurada.',
     idea: 'La fase de crecimiento propone leer, estudiar y ampliar los conocimientos. Podés adaptarla eligiendo una sola idea que quieras explorar y relacionar con tu vida.',
     prompt: '¿Qué idea te dejó pensando últimamente y dónde podrías ponerla a prueba?', pages: [273, 274],
+  },
+  {
+    id: 'silo-aprender-haciendo', book: 'silo-v2', title: 'Escuchar lo que deja tu hacer', theme: 'Aprendizaje',
+    reflection: 'Además de terminar una tarea, podés mirar cómo te quedás después de hacerla.',
+    idea: 'Al describir la acción en el mundo, Silo considera el registro interno y la realimentación que permite aprender. Podés revisar una acción concreta y elegir qué sostener o ajustar, sin convertir el registro en un juicio sobre vos.',
+    prompt: '¿Qué acción de hoy te dejó más en acuerdo con vos y qué aprendiste al hacerla?', pages: [125, 126], sourceContext: 'Apuntes de Psicología · Psicología III · La acción en el mundo como forma transferencial',
   },
   {
     id: 'monje-tiempo', book: 'monje', title: 'Elegir a qué darle tu tiempo', theme: 'Prioridades',
@@ -157,6 +188,12 @@ export const inspirations: Inspiration[] = [
     prompt: '¿Qué tarea merece un rato de atención y qué distracción podrías apartar mientras la hacés?', pages: [309],
   },
   {
+    id: 'silo-agradecer', book: 'silo-v1', title: 'Reconocer un momento bueno', theme: 'Gratitud',
+    reflection: 'Si hoy hubo un momento de alegría o de cercanía, podés guardarle unas palabras.',
+    idea: 'El cierre de Los Principios invita al agradecimiento cuando se reconoce alegría, bondad o libertad interior. Acá lo llevamos al diario como una invitación opcional: registrar algo valioso que ocurrió, sin obligarte a sentir gratitud.',
+    prompt: '¿Hubo un momento que te hizo bien y que quisieras recordar como fue?', pages: [23], sourceContext: 'La mirada interna · XIII. Los Principios, párrafo final',
+  },
+  {
     id: 'monje-presente', book: 'monje', title: 'Notar un detalle de hoy', theme: 'Presencia',
     reflection: 'Este día también tiene algo que merece ser mirado despacio.',
     idea: 'El sendero de diamantes representa disfrutar el presente y advertir lo valioso de lo cotidiano mientras se siguen teniendo proyectos. Elegí un detalle que hoy no quieras pasar por alto.',
@@ -179,6 +216,12 @@ export const inspirations: Inspiration[] = [
     reflection: 'Podés dejar algo de espacio para recuperar el aire que usaste al dar lo mejor de vos.',
     idea: 'Los ciclos del libro alternan períodos de concentración con recuperación. Esta adaptación invita a reservar descanso dentro del día, sin exigir rendir siempre al máximo.',
     prompt: '¿Qué descanso te devolvería energía y en qué momento real podrías hacerlo hoy?', pages: [311, 329, 331],
+  },
+  {
+    id: 'silo-otra-mirada', book: 'silo-v2', title: 'Volver a mirar lo vivido', theme: 'Comprensión',
+    reflection: 'Una experiencia conocida puede mostrarte un detalle nuevo cuando la mirás con otra pregunta.',
+    idea: 'Apuntes de Psicología describe cómo dirigir la atención hacia el recuerdo permite advertir aspectos que antes pasaron de largo. La invitación de hoy es releer una situación con curiosidad, admitiendo también lo que no recordás con claridad.',
+    prompt: '¿Qué situación de hoy podrías mirar de nuevo para comprenderla un poco mejor?', pages: [17, 90], sourceContext: 'Apuntes de Psicología · Psicología I, Conciencia; Psicología II, apercepción en la evocación',
   },
   {
     id: 'atomicos-volver', book: 'atomicos', title: 'Preparar la próxima oportunidad', theme: 'Volver a empezar',
@@ -214,7 +257,7 @@ export function getDailyInspiration(date: string): Inspiration {
   return inspirations[index]!;
 }
 
-/** Una cita breve por día; las cuatro fuentes se alternan en un ciclo estable. */
+/** Una cita breve por día; las seis fuentes se alternan en un ciclo estable. */
 export function getDailyQuote(date: string): BookQuote {
   const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(date) ? Date.parse(`${date}T00:00:00Z`) : NaN;
   const day = Number.isFinite(timestamp) ? Math.floor(timestamp / 86400000) : 0;
