@@ -1,7 +1,11 @@
-import { getTrainingElapsed, getTrainingSummary, normalizeTrainingSession, type TrainingExerciseLog, type TrainingSession } from './training';
+import { getTrainingElapsed, getTrainingSummary, isTrainingAssistanceExercise, normalizeTrainingSession, type TrainingExerciseLog, type TrainingSession } from './training';
 
 const number = (value:number) => value.toLocaleString('es-AR',{maximumFractionDigits:2});
 const workingLoads = (exercise:TrainingExerciseLog):number[] => exercise.sets.filter(set=>set.kind==='working'&&set.completedAt!==null&&set.loadKg!==null).map(set=>set.loadKg!);
+const repsAtAssistance = (exercise:TrainingExerciseLog,assistance:number):string => {
+  const reps=exercise.sets.filter(set=>set.kind==='working'&&set.completedAt!==null&&set.loadKg===assistance&&set.reps!==null).map(set=>number(set.reps!));
+  return reps.length?`${reps.join(', ')} repeticiones registradas en esas series`:'repeticiones sin registrar';
+};
 const statusLabel = {active:'En curso',paused:'En pausa',completed:'Finalizada',abandoned:'Cerrada parcial',imported:'Historial importado'};
 
 /** Factual training records stay separate from reconstructed calendar blocks. */
@@ -33,30 +37,38 @@ export function trainingReport(raw:unknown,dates:string[],exportedAt:number,inli
     if(imported){
       lines.push('Registro del gym anterior: conserva las cargas y estados originales. No tenía repeticiones reales ni duración de sesión; no se incluye en los totales de series realizadas.','');
     }else{
-      const elapsed=getTrainingElapsed(session,Number.isFinite(exportedAt)?exportedAt:session.startedAt);
-      lines.push(`- Cronómetro guardado${session.status==='active'?(dayClosed?' hasta el final de su fecha':' al exportar'):''}: **${number(elapsed/60)} min**.`,
+      const unclosed=dayClosed&&(session.status==='active'||session.status==='paused');
+      const duration=unclosed?'- **Sin cierre registrado: duración de la sesión no disponible.**'
+        :`- Cronómetro guardado${session.status==='active'?' al exportar':''}: **${number(getTrainingElapsed(session,Number.isFinite(exportedAt)?exportedAt:session.startedAt)/60)} min**.`;
+      lines.push(duration,
         `- Series efectivas: **${summary.completedSets}** registradas / ${summary.targetSets} preparadas en la sesión. Aproximaciones: **${summary.warmupSets}** registradas.`,
         `- Ejercicios marcados hechos: **${summary.completedExercises}/${summary.totalExercises}**.`,
         `- RPE promedio registrado: **${summary.averageRpe===null?'Sin registrar':number(summary.averageRpe)+'/10'}**. Molestia promedio registrada: **${summary.averageDiscomfort===null?'Sin registrar':number(summary.averageDiscomfort)+'/10'}**.`,'');
     }
     for(const exercise of session.exercises){
+      const assistance=isTrainingAssistanceExercise(exercise);
       const completed=exercise.sets.filter(set=>set.completedAt!==null);
       const sets=imported?exercise.sets.filter(set=>set.loadKg!==null):completed;
       const hasDetail=sets.length||exercise.notes.trim()||exercise.rpe!==null||exercise.discomfort!==null||exercise.status!=='pending';
       if(!hasDetail)continue;
       lines.push(`**${inline(exercise.name)}** · ${({pending:'Pendiente',done:'Hecho',adjust:'Ajustar',skipped:'Saltado'})[exercise.status]}`,'');
       for(const set of sets){
-        const load=set.loadKg===null?'Sin carga registrada':`${number(set.loadKg)} kg`;
+        const load=set.loadKg===null?(assistance?'Sin asistencia registrada':'Sin carga registrada'):`${number(set.loadKg)} kg${assistance?' de asistencia':''}`;
         const done=imported?'repeticiones y segundos sin registro':set.durationSeconds!==null?`${number(set.durationSeconds)} s`:set.reps!==null?`${number(set.reps)} repeticiones`:'Sin repeticiones ni segundos';
-        lines.push(`- ${set.id.toUpperCase()} · ${set.kind==='warmup'?'Aproximación':'Serie efectiva'}: **${load}** · ${done}${imported?' · carga del archivo anterior':''}.`);
+        lines.push(`- ${set.id.toUpperCase()} · ${set.kind==='warmup'?'Aproximación':'Serie efectiva'}: **${load}** · ${done}${imported?(assistance?' · asistencia del archivo anterior':' · carga del archivo anterior'):''}.`);
       }
       if(!imported){
         const current=workingLoads(exercise);
         const previous=all.filter(item=>item.id!==session.id&&item.status!=='imported'&&item.startedAt<session.startedAt)
           .reverse().map(item=>({session:item,exercise:item.exercises.find(value=>value.exerciseId===exercise.exerciseId&&value.variantId===exercise.variantId&&workingLoads(value).length)})).find(item=>item.exercise);
         if(current.length&&previous?.exercise){
-          const before=Math.max(...workingLoads(previous.exercise)),after=Math.max(...current),delta=after-before;
-          lines.push(`- Mayor carga efectiva registrada en esta sesión: **${number(after)} kg**. Registro anterior de la misma variante (${previous.session.date}): **${number(before)} kg**. Diferencia: **${delta>0?'+':''}${number(delta)} kg**; revisar junto a las repeticiones y sensaciones.`);
+          if(assistance){
+            const before=Math.min(...workingLoads(previous.exercise)),after=Math.min(...current),delta=after-before;
+            lines.push(`- Menor asistencia efectiva registrada en esta sesión: **${number(after)} kg de asistencia** (${repsAtAssistance(exercise,after)}). Registro anterior de la misma variante (${previous.session.date}): **${number(before)} kg de asistencia** (${repsAtAssistance(previous.exercise,before)}). Diferencia de asistencia: **${delta>0?'+':''}${number(delta)} kg**. Menos asistencia no implica una ganancia automática de fuerza; revisar también repeticiones, técnica y sensaciones.`);
+          }else{
+            const before=Math.max(...workingLoads(previous.exercise)),after=Math.max(...current),delta=after-before;
+            lines.push(`- Mayor carga efectiva registrada en esta sesión: **${number(after)} kg**. Registro anterior de la misma variante (${previous.session.date}): **${number(before)} kg**. Diferencia: **${delta>0?'+':''}${number(delta)} kg**; revisar junto a las repeticiones y sensaciones.`);
+          }
         }
       }
       if(exercise.rpe!==null)lines.push(`- RPE elegido: ${number(exercise.rpe)}/10.`);

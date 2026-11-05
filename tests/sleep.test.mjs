@@ -24,10 +24,10 @@ test('una excepción de mañana recalcula esta noche y los cambios de jardín se
  assert.equal(school.wakeTime,405);
 });
 test('medianoche corresponde al próximo día y el sueño configurado cambia el objetivo',()=>{
- const night=getNightPlan('2026-10-21',settings);
+ const night=getNightPlan('2026-10-21',{...settings,gymDays:[]});
  assert.equal(night.wakeTime,480);assert.equal(night.bedtime,0);assert.equal(night.bedtimeDate,'2026-10-22');
  assert.equal(night.preparationDate,'2026-10-21');assert.equal(night.preparationTime,1395);
- const longer=getNightPlan('2026-10-21',{...settings,sleepHours:9});
+ const longer=getNightPlan('2026-10-21',{...settings,gymDays:[],sleepHours:9});
  assert.equal(longer.bedtime,1380);assert.equal(longer.bedtimeDate,'2026-10-21');
  assert.equal(longer.preparationDate,'2026-10-21');assert.equal(longer.preparationTime,1335);
 });

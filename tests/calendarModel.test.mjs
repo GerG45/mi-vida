@@ -10,9 +10,10 @@ const planner=await import(plannerUrl);
 const model=await import(data((await compile('../src/lib/calendarModel.ts')).replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`)));
 const sleepUrl=data((await compile('../src/lib/sleep.ts')).replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`));
 const {getNightPlan}=await import(sleepUrl);
+const trainingReviewUrl=data(await compile('../src/lib/trainingPlanReview.ts'));
 const alarmSource=(await compile('../src/lib/alarms.ts'))
   .replace(/import\s*\{[^}]+\}\s*from\s*['"]@capacitor\/core['"];?/, 'const Capacitor={isNativePlatform:()=>false,getPlatform:()=>"web"}; const registerPlugin=()=>({});')
-  .replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/,`from '${sleepUrl}'`);
+  .replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/,`from '${sleepUrl}'`).replace(/from ['"]\.\/trainingPlanReview['"]/,`from '${trainingReviewUrl}'`);
 const alarms=await import(data(alarmSource));
 const raw=(id,start,end,patch={})=>({id,summary:'Compromiso externo',start:{dateTime:start},end:{dateTime:end},updated:'2026-10-19T12:00:00Z',...patch});
 const occurrences=(rawEvents,from='2026-10-20',through=from)=>model.normalizeGoogleCalendarEvents('personal@example.test',rawEvents,from,through);

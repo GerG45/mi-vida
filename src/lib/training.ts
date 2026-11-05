@@ -40,6 +40,11 @@ export interface TrainingRoutine {
   exercises: TrainingExerciseDefinition[];
 }
 export type TrainingSessions = Record<string, TrainingSession>;
+export type TrainingDaySuggestion = {day:TrainingDayNumber;previousDate?:string;previousTitle?:string;previousUnclosed?:boolean};
+
+/** Default for newly created sessions; saved sessions keep their original prescription. */
+export const DEFAULT_TRAINING_REST_SECONDS = 120;
+export const DEFAULT_WARMUP_REST_SECONDS = 60;
 
 type TemplateRow = [TrainingDayNumber, string, string, string, boolean, number, number, number, number | null, string, string, string];
 const rows: TemplateRow[] = [
@@ -104,6 +109,26 @@ export function getTrainingExercise(id: string) { return TRAINING_EXERCISES.find
 export function isTimedTrainingExercise(exercise: Pick<TrainingExerciseLog,'variantId'|'secondsTarget'>) {
   return exercise.secondsTarget !== null || ['front-plank','hollow-hold','side-plank'].includes(exercise.variantId);
 }
+/** This machine records counterweight assistance, not resistance lifted by the person. */
+export function isTrainingAssistanceExercise(exercise:Pick<TrainingExerciseLog,'exerciseId'>):boolean {
+  return exercise.exerciseId==='plan-assisted-pullup';
+}
+/** Suggest the next block from actual work, even when an older session was never closed. */
+export function getTrainingDaySuggestion(sessions:TrainingSessions,selectedDate:string):TrainingDaySuggestion {
+  if(!validDate(selectedDate))return {day:1};
+  const candidates=Object.values(sessions)
+    .filter(session=>session.status!=='imported'&&!session.legacyDateUnknown&&validDate(session.date)&&session.date<=selectedDate&&[1,2,3].includes(session.day))
+    .sort((a,b)=>b.date.localeCompare(a.date)||b.startedAt-a.startedAt||b.id.localeCompare(a.id));
+  const resume=candidates.find(session=>session.date===selectedDate&&(session.status==='active'||session.status==='paused'));
+  if(resume)return {day:resume.day};
+  const previous=candidates.find(session=>session.routineId!=='plan-pullups-optional'&&session.exercises.some(exercise=>exercise.sets.some(set=>set.kind==='working'&&set.completedAt!==null)));
+  if(!previous)return {day:1};
+  return {
+    day:(previous.day%3+1) as TrainingDayNumber,
+    previousDate:previous.date,previousTitle:previous.title,
+    previousUnclosed:previous.status==='active'||previous.status==='paused',
+  };
+}
 export function getPreviousExercise(sessions: TrainingSessions, exerciseId: string, variantId: string, excludeSessionId?: string): TrainingExerciseLog | undefined {
   return Object.values(sessions).filter(session=>session.id!==excludeSessionId && session.status!=='imported')
     .sort((a,b)=>b.startedAt-a.startedAt || b.id.localeCompare(a.id))
@@ -116,9 +141,11 @@ export function getPreviousTrainingSet(sessions:TrainingSessions,exerciseId:stri
     .flatMap(exercise=>exercise.sets.filter(set=>set.id===setId&&set.completedAt!==null))
     .sort((a,b)=>(b.completedAt??0)-(a.completedAt??0))[0];
 }
-export function createTrainingSession(options: {id:string;date:string;week:TrainingWeekNumber;day:TrainingDayNumber;sessions?:TrainingSessions;now?:number;routine?:TrainingRoutine}): TrainingSession {
+export function createTrainingSession(options: {id:string;date:string;week:TrainingWeekNumber;day:TrainingDayNumber;sessions?:TrainingSessions;now?:number;routine?:TrainingRoutine;restSeconds?:number|null}): TrainingSession {
   const {id,date,week,day,routine} = options; const now=options.now??Date.now();
   const definitions=routine?.exercises??TRAINING_DAYS[day-1].exercises;
+  // `null` is reserved for importing the original plan's factual prescription.
+  const restSeconds=options.restSeconds===null?null:typeof options.restSeconds==='number'&&Number.isInteger(options.restSeconds)&&options.restSeconds>=0&&options.restSeconds<=3600?options.restSeconds:DEFAULT_TRAINING_REST_SECONDS;
   return {
     id,date,week,day,title:routine?.name??TRAINING_DAYS[day-1].title,status:'active',startedAt:now,completedAt:null,
     activeStartedAt:now,elapsedSeconds:0,restUntil:null,pausedRestSeconds:null,setTimerUntil:null,pausedSetSeconds:null,
@@ -138,12 +165,24 @@ export function createTrainingSession(options: {id:string;date:string;week:Train
         exerciseId:definition.id,sourceExerciseId:routine?`${routine.id}-${definition.id}`:`w${week}-${definition.id}`,
         variantId:variant.id,name:variant.name,primaryMuscle:definition.primaryMuscle,targetSets:definition.targetSets,
         repsMin:definition.repsMin,repsMax:definition.repsMax,secondsTarget:definition.secondsTarget,
-        restSeconds:definition.restSeconds,hasWarmupSet:definition.hasWarmupSet,
+        restSeconds:restSeconds??definition.restSeconds,hasWarmupSet:definition.hasWarmupSet,
         sets:[...(definition.hasWarmupSet?[makeSet(0)]:[]),...Array.from({length:definition.targetSets},(_,i)=>makeSet(i+1))],
         status:'pending',rpe:null,discomfort:null,notes:'',
       };
     }),
   };
+}
+/** Explicit adjustment of upcoming auto-rests. Running timers and every factual record stay intact. */
+export function setPendingTrainingRest(session:TrainingSession,seconds=DEFAULT_TRAINING_REST_SECONDS):TrainingSession {
+  if(!['active','paused'].includes(session.status)||!Number.isInteger(seconds)||seconds<0||seconds>3600)return session;
+  let changed=false;
+  const exercises=session.exercises.map(exercise=>{
+    const pending=exercise.status!=='done'&&exercise.status!=='skipped'&&exercise.sets.some(set=>set.kind==='working'&&set.completedAt===null);
+    if(!pending||exercise.restSeconds===seconds)return exercise;
+    changed=true;
+    return {...exercise,restSeconds:seconds};
+  });
+  return changed?{...session,exercises}:session;
 }
 export function getTrainingElapsed(session: TrainingSession, now=Date.now()): number {
   const endOfDay=new Date(`${session.date}T00:00:00`);endOfDay.setDate(endOfDay.getDate()+1);
@@ -203,7 +242,8 @@ export function completeTrainingSet(session:TrainingSession,exerciseIndex:number
   if(set.kind==='working'&&exercise.sets.some(value=>value.kind==='warmup'&&value.completedAt===null))return session;
   const sets=exercise.sets.map(value=>value.id===setId?{...value,completedAt:now}:value);
   const done=sets.filter(set=>set.kind==='working').every(set=>set.completedAt!==null);
-  return {...session,restUntil:now+exercise.restSeconds*1000,pausedRestSeconds:null,setTimerUntil:null,pausedSetSeconds:null,
+  const restSeconds=set.kind==='warmup'?Math.min(exercise.restSeconds,DEFAULT_WARMUP_REST_SECONDS):exercise.restSeconds;
+  return {...session,restUntil:now+restSeconds*1000,pausedRestSeconds:null,setTimerUntil:null,pausedSetSeconds:null,
     exercises:session.exercises.map((value,index)=>index===exerciseIndex?{...value,sets,status:done?'done':value.status}:value)};
 }
 export function finishTrainingSession(session:TrainingSession,now=Date.now(),status:'completed'|'abandoned'='completed'):TrainingSession {
@@ -235,14 +275,16 @@ export function getTrainingSummary(session:TrainingSession) {
   const sets=session.exercises.flatMap(exercise=>exercise.sets);
   const completed=sets.filter(set=>set.completedAt!==null);
   const working=completed.filter(set=>set.kind==='working');
+  const resistance=session.exercises.filter(exercise=>!isTrainingAssistanceExercise(exercise))
+    .flatMap(exercise=>exercise.sets.filter(set=>set.kind==='working'&&set.completedAt!==null));
   const numeric=(values:(number|null)[])=>values.filter((value):value is number=>value!==null);
   const mean=(values:number[])=>values.length?Math.round(values.reduce((a,b)=>a+b,0)/values.length*10)/10:null;
   return {completedSets:working.length,targetSets:sets.filter(set=>set.kind==='working').length,
     warmupSets:completed.filter(set=>set.kind==='warmup').length,
     completedExercises:session.exercises.filter(exercise=>exercise.status==='done').length,totalExercises:session.exercises.length,
     reps:working.reduce((total,set)=>total+(set.reps??0),0),durationSeconds:working.reduce((total,set)=>total+(set.durationSeconds??0),0),
-    volumeKg:working.reduce((total,set)=>total+(set.loadKg??0)*(set.reps??0),0),
-    bestLoadKg:working.some(set=>set.loadKg!==null)?Math.max(...working.flatMap(set=>set.loadKg===null?[]:[set.loadKg])):null,
+    volumeKg:resistance.reduce((total,set)=>total+(set.loadKg??0)*(set.reps??0),0),
+    bestLoadKg:resistance.some(set=>set.loadKg!==null)?Math.max(...resistance.flatMap(set=>set.loadKg===null?[]:[set.loadKg])):null,
     averageRpe:mean(numeric(session.exercises.map(exercise=>exercise.rpe))),averageDiscomfort:mean(numeric(session.exercises.map(exercise=>exercise.discomfort))),
   };
 }
@@ -328,7 +370,7 @@ export function importLegacyTraining(input:unknown,now=Date.now()):LegacyTrainin
         const id=`legacy-${sourceId}`;
         const localDate=new Date(validTimestamp);
         const date=`${localDate.getFullYear()}-${String(localDate.getMonth()+1).padStart(2,'0')}-${String(localDate.getDate()).padStart(2,'0')}`;
-        const base=createTrainingSession({id,date,week:Number(sourceId[1]) as TrainingWeekNumber,day:definition.day,now:validTimestamp});
+        const base=createTrainingSession({id,date,week:Number(sourceId[1]) as TrainingWeekNumber,day:definition.day,now:validTimestamp,restSeconds:null});
         const exercise=base.exercises.find(exercise=>exercise.exerciseId===definition.id)!;
         const hasWarmup=typeof original.hasWarmupSet==='boolean'?original.hasWarmupSet:definition.hasWarmupSet;
         const statusMap:Record<string,TrainingExerciseStatus>={Pendiente:'pending',Hecho:'done',Ajustar:'adjust',Saltado:'skipped'};

@@ -8,11 +8,12 @@ const data = code => `data:text/javascript;base64,${Buffer.from(code).toString('
 const plannerUrl = data(transpile(await fs.readFile(new URL('../src/lib/planner.ts',import.meta.url),'utf8')));
 const planner = await import(plannerUrl);
 const sleepUrl = data(transpile(await fs.readFile(new URL('../src/lib/sleep.ts',import.meta.url),'utf8')).replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`));
+const trainingReviewUrl = data(transpile(await fs.readFile(new URL('../src/lib/trainingPlanReview.ts',import.meta.url),'utf8')));
 const alarmsSource = transpile(await fs.readFile(new URL('../src/lib/alarms.ts',import.meta.url),'utf8'));
 let moduleId=0;
 async function api(plugin={}) {
   globalThis.__alarmPlugin=plugin;
-  const source=alarmsSource.replace(/import\s*\{[^}]+\}\s*from\s*['"]@capacitor\/core['"];?/, 'const Capacitor={isNativePlatform:()=>false,getPlatform:()=>"web"}; const registerPlugin=()=>globalThis.__alarmPlugin;').replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/,`from '${sleepUrl}'`);
+  const source=alarmsSource.replace(/import\s*\{[^}]+\}\s*from\s*['"]@capacitor\/core['"];?/, 'const Capacitor={isNativePlatform:()=>false,getPlatform:()=>"web"}; const registerPlugin=()=>globalThis.__alarmPlugin;').replace(/from ['"]\.\/planner['"]/,`from '${plannerUrl}'`).replace(/from ['"]\.\/sleep['"]/,`from '${sleepUrl}'`).replace(/from ['"]\.\/trainingPlanReview['"]/,`from '${trainingReviewUrl}'`);
   return import(data(source)+`#${++moduleId}`);
 }
 const alarms=await api();
@@ -350,4 +351,36 @@ test('desactivar avisos vacía sólo el lote y conserva la prueba de 30 segundos
   assert.deepEqual(calls,[['schedule',0]]);
   await queue.queueAlarmSchedule(queue.invalidateAlarmSchedule(),[],true);
   assert.deepEqual(calls,[['schedule',0],'cancel-all',['schedule',0]]);
+});
+
+
+test('la revisión mensual del plan prepara tres avisos aun sin agenda y fuera del horizonte de14d',()=>{
+  const plan={...settings,scheduleEnabled:false,trainingPlanId:'new-plan',trainingPlanStartedOn:'2026-11-05',trainingPlanReviewedOn:'',trainingPlanReviewEnabled:true,trainingPlanReviewTime:'09:00'};
+  const original=structuredClone(plan), now=new Date(2026,10,5,11).getTime();
+  const batch=alarms.buildAlarmBatch({settings:plan,preferences:prefs({}),now});
+  assert.deepEqual(batch.preview.map(alarm=>alarm.key),['training-review:new-plan:2026-12-05','training-review:new-plan:2027-01-05','training-review:new-plan:2027-02-05']);
+  assert(batch.preview.every(alarm=>alarm.source==='training-review'&&alarm.kind==='reminder'&&new Date(alarm.at).getHours()===9));
+  assert.equal(batch.through,'2026-11-18');assert.deepEqual(plan,original);
+  assert(!batch.preview.some(alarm=>alarm.source==='wake'));
+});
+test('la revisión atrasada no reproduce el pasado ni vuelve a sonar al abrir después de la hora de hoy',()=>{
+  const plan={...settings,scheduleEnabled:false,trainingPlanId:'new-plan',trainingPlanStartedOn:'2026-11-05',trainingPlanReviewEnabled:true,trainingPlanReviewTime:'09:00'};
+  const before=alarms.buildAlarmBatch({settings:plan,preferences:prefs({}),now:new Date(2026,11,5,8).getTime()});
+  const after=alarms.buildAlarmBatch({settings:plan,preferences:prefs({}),now:new Date(2026,11,5,10).getTime()});
+  assert.equal(before.preview[0].key,'training-review:new-plan:2026-12-05');
+  assert.equal(after.preview.length,3);assert.equal(after.preview[0].key,'training-review:new-plan:2027-01-05');
+  assert.equal(after.preview[0].id,before.preview.find(alarm=>alarm.key===after.preview[0].key).id);
+  const reviewed=alarms.buildAlarmBatch({settings:{...plan,trainingPlanReviewedOn:'2026-12-05'},preferences:prefs({}),now:new Date(2026,11,5,8).getTime()});
+  assert.equal(reviewed.preview[0].key,'training-review:new-plan:2027-01-05');
+  const disabled=alarms.buildAlarmBatch({settings:{...plan,trainingPlanReviewEnabled:false},preferences:prefs({}),now:new Date(2026,10,5).getTime()});
+  assert.equal(disabled.preview.length,0);
+});
+test('los avisos mensuales no desplazan despertadores, sueño ni puntuales al alcanzar el límite',()=>{
+  const plan={...settings,trainingPlanId:'new-plan',trainingPlanStartedOn:'2026-10-19',trainingPlanReviewEnabled:true,trainingPlanReviewTime:'09:00'};
+  const extras=Array.from({length:30},(_,index)=>({id:'crowd-'+index,title:'Compromiso',days:[0,1,2,3,4,5,6],startHHmm:'12:00',durationMin:5,travelMin:0,kind:'personal'}));
+  const preferences=prefs({wake:true,bedtime:true,agenda:true,custom:[{id:'far',title:'Puntual',date:'2027-01-01',time:'10:00',kind:'wake'}]});
+  const full=alarms.buildAlarmBatch({settings:plan,extras,preferences,now:localEpoch(19)});
+  const essential=alarms.buildAlarmBatch({settings:plan,preferences:{...preferences,agenda:false},now:localEpoch(19)});
+  assert.equal(full.notifications.length,200);assert.equal(full.preview.filter(alarm=>alarm.source==='training-review').length,3);
+  for(const expected of essential.preview){const found=full.preview.find(alarm=>alarm.key===expected.key);assert(found,expected.key);assert.equal(found.at,expected.at);assert.equal(found.id,expected.id);}
 });

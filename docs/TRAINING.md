@@ -4,6 +4,22 @@ Desde el bloque de entrenamiento de «Mi día» o la pestaña «Entrenar» se ab
 
 ## Registrar una sesión
 
+### Plan mensual de dominadas y core
+
+Desde Ajustes → Plan del mes se puede activar una etapa de cuatro semanas con tres sesiones principales (martes, jueves y sábado) y una cuarta práctica opcional. El plan original y las rutinas personales siguen en el selector. Activarlo cambia únicamente los ajustes del plan: no reemplaza sesiones, cargas ni notas.
+
+Se reservan 90 minutos para cada sesión principal. Martes y jueves se buscan por la mañana; con los ajustes actuales pueden quedar 08:30–10:00. El viernes conserva la tanda de cocina. La práctica opcional ocupa 35 minutos y se agrega por fecha desde Mi día, con sus viajes, ducha y cuidados; no adelanta la rotación A/B/C. Un lunes sin trabajo puede ofrecer esa práctica corta.
+
+Las rutinas A/B/C combinan tren inferior, empuje, tirón y core. La dominada asistida usa un ejercicio separado: `loadKg` significa kg de asistencia en esa máquina. La interfaz y los reportes lo rotulan así; no suman esos kilos al volumen levantado ni los comparan con el jalón. Más asistencia facilita el movimiento. El tutorial de PureGym y su ilustración están disponibles desde el ejercicio.
+
+Las nuevas sesiones usan 120 segundos de descanso efectivo; las aproximaciones usan hasta 60 segundos. Los botones incluyen 150 y 180 segundos para ajustar el contador. Las sesiones ya guardadas conservan su prescripción. «Usar 2 min en lo que falta» modifica sólo ejercicios pendientes de una sesión de hoy y conserva los plazos ya iniciados, series, kilos y notas. La importación de Plan Gym conserva sus descansos originales.
+
+La semana sugerida se calcula desde el inicio del plan y queda en consolidación después de la cuarta; no cambia el número de semana de ninguna sesión guardada. La siguiente rutina se propone a partir del último bloque con series efectivas, aunque una sesión pasada haya quedado abierta. Esas sesiones siguen sin cierre, en consulta, y no se usan para inventar duraciones.
+
+La revisión mensual se calcula por aniversario del inicio, con ajuste al último día de los meses cortos. En Android se preparan los tres próximos avisos con el ding de recordatorio, aparte de las alarmas de agenda de catorce días. El horario y la activación se ajustan en Plan del mes. La web muestra una revisión pendiente al llegar la fecha. Revisar el plan no genera otro ni cambia cargas automáticamente.
+
+El contenido es una propuesta editable, con progreso gradual y margen de repeticiones, sin aumentos automáticos ni promesa de lograr una dominada en un mes. Fuentes: [ACSM, actualización de fuerza 2026](https://acsm.org/resistance-training-guidelines-update-2026/) y [PureGym, máquina asistida](https://www.puregym.com/blog/how-to-use-gym-equipment/).
+
 Elegí rutina y semana, revisá la variante de cada ejercicio y empezá. La sesión conserva las series de aproximación indicadas por el plan. Registrá los kilos y las repeticiones o segundos que realmente hiciste y completá cada serie. Las aproximaciones se distinguen de las series efectivas.
 
 Los descansos y las series cronometradas se calculan a partir de una hora de finalización. Podés pausarlos, ajustar el tiempo y saltarlos. Al volver, el contador recupera el tiempo correspondiente.

@@ -17,7 +17,7 @@ const [gym, media] = await Promise.all([
 ]);
 
 test('every exercise and equipment variant has its own concrete tutorial and offline illustration', async () => {
-  assert.deepEqual(Object.keys(media.TRAINING_MEDIA).sort(), gym.TRAINING_EXERCISES.map(exercise => exercise.id).sort());
+  assert(gym.TRAINING_EXERCISES.every(exercise=>Object.hasOwn(media.TRAINING_MEDIA,exercise.id)), 'El catálogo ampliado mantiene todos los tutoriales originales');
   for (const exercise of gym.TRAINING_EXERCISES) {
     const group = media.getTrainingMedia(exercise.id);
     assert.deepEqual(group.tutorials.map(tutorial => tutorial.id).sort(), exercise.variants.map(variant => variant.id).sort(), exercise.name);
@@ -44,6 +44,18 @@ test('every exercise and equipment variant has its own concrete tutorial and off
       assert.doesNotMatch(svg, /<script\b|<image\b|\bonload\s*=|\bhref\s*=/i);
     }
   }
+});
+
+test('assisted-machine tutorial has its own assistance illustration and exact primary-source video',async()=>{
+  const tutorial=media.getTrainingTutorial('plan-assisted-pullup','assisted-machine');
+  assert.equal(tutorial.videoId,'wFj808u2HWU');
+  assert.equal(tutorial.channel,'PureGym');
+  assert.equal(tutorial.language,'en');
+  assert.equal(tutorial.url,'https://www.youtube.com/watch?v=wFj808u2HWU');
+  assert.equal(media.getTrainingTutorial('plan-assisted-pullup','band-assisted'),undefined,'No intercambia equipos distintos');
+  const svg=await fs.readFile(new URL('../public/'+tutorial.illustration.slice(2),import.meta.url),'utf8');
+  assert.match(svg,/Dominada asistida/);
+  assert.doesNotMatch(svg,/<script\b|<image\b|\bonload\s*=|\bhref\s*=/i);
 });
 
 test('unknown exercise or equipment never opens another variant as its tutorial', async () => {

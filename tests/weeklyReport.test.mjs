@@ -212,7 +212,8 @@ test('reporte distingue borradores, parciales y antiguos importados sin inventar
   const report=buildWeeklyReport(backup({gymSessions:{draft,partial,old:imported}}),'2026-10-18');
   assert.equal(report.trainingSessions,1);
   assert.match(report.markdown,/Estado:\*\* Sin cierre registrado · día cerrado/);
-  assert.match(report.markdown,/Cronómetro guardado hasta el final de su fecha: \*\*0,5 min\*\*/);
+  assert.match(report.markdown,/Sin cierre registrado: duración de la sesión no disponible/);
+  assert.doesNotMatch(report.markdown,/Cronómetro guardado hasta el final de su fecha/);
   assert.match(report.markdown,/Estado:\*\* Cerrada parcial/);
   assert.match(report.markdown,/Estado:\*\* Historial importado/);
   assert.match(report.markdown,/repeticiones y segundos sin registro/);
@@ -224,6 +225,32 @@ test('reporte distingue borradores, parciales y antiguos importados sin inventar
   const unknown=buildWeeklyReport(backup({gymSessions:{old:undated}}),'2026-10-18');
   assert.match(unknown.markdown,/registros importados sin fecha de entrenamiento verificable/);
   assert.doesNotMatch(unknown.markdown,/\*\*60 kg\*\*/);
+});
+
+test('past active and paused workouts keep factual sets but do not report projected midnight minutes as duration',()=>{
+  const start=new Date('2026-10-14T09:00:00').getTime();
+  let active=training.createTrainingSession({id:'unclosed',date:'2026-10-14',week:1,day:1,now:start});
+  active=training.updateTrainingSet(active,0,'s0',{loadKg:10,reps:8});
+  active=training.completeTrainingSet(active,0,'s0',start+1000);
+  active=training.updateTrainingSet(active,0,'s1',{loadKg:20,reps:10});
+  active=training.completeTrainingSet(active,0,'s1',start+2000);
+  for(const session of [active,training.pauseTrainingSession(active,start+1200000)]){
+    const input={...backup({gymSessions:{unclosed:session}}),exportedAt:new Date('2026-10-15T10:00:00').toISOString()};
+    const original=structuredClone(input),report=buildWeeklyReport(input,'2026-10-14');
+    const gym=report.markdown.split('## Entrenamiento · registros guardados')[1];
+    assert.equal(report.trainingSessions,1);
+    assert.match(gym,/Sin cierre registrado: duración de la sesión no disponible/);
+    assert.match(gym,/S1 · Serie efectiva: \*\*20 kg\*\* · 10 repeticiones/);
+    assert.doesNotMatch(gym,/Cronómetro guardado|900 min|20 min/);
+    assert.deepEqual(input,original,'El reporte conserva el estado abierto o pausado y todos sus registros');
+  }
+  const today={...backup({gymSessions:{unclosed:active}}),exportedAt:new Date('2026-10-14T10:00:00').toISOString()};
+  const current=buildWeeklyReport(today,'2026-10-14').markdown.split('## Entrenamiento · registros guardados')[1];
+  assert.match(current,/Cronómetro guardado al exportar: \*\*60 min\*\*/);
+  assert.doesNotMatch(current,/duración de la sesión no disponible/,'La sesión activa del mismo día conserva su reloj identificado al exportar');
+  const completed=training.finishTrainingSession(active,start+1200000);
+  const finished=buildWeeklyReport({...backup({gymSessions:{unclosed:completed}}),exportedAt:new Date('2026-10-15T10:00:00').toISOString()},'2026-10-14').markdown.split('## Entrenamiento · registros guardados')[1];
+  assert.match(finished,/Cronómetro guardado: \*\*20 min\*\*/);
 });
 
 const workItem = (id, date, patch = {}) => ({

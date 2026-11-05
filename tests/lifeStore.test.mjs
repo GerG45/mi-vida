@@ -30,6 +30,15 @@ async function store() {
 }
 const settings = {childName:'tu peque',scheduleEnabled:false,gymDays:[1,3,5],schoolStart:'07:45',preparationMin:20,sleepHours:8,anchorMonday:'2026-10-12'};
 
+test('la práctica opcional se respalda como excepción sin reemplazar otras fechas',async()=>{
+  const s=await store();s.useLifeState('overrides',{});
+  s.restoreLifeBackup({version:1,sections:{overrides:{'2026-11-02':{skipPewen:true},'2026-11-11':{gymOptional:true}}}});
+  const saved=s.getLifeBackup();assert.equal(saved.sections.overrides['2026-11-02'].skipPewen,true);
+  assert.equal(saved.sections.overrides['2026-11-11'].gymOptional,true);
+  assert.throws(()=>s.restoreLifeBackup({version:1,sections:{overrides:{'2026-11-11':{gymOptional:'true'}}}}));
+  assert.deepEqual(s.getLifeBackup().sections.overrides,saved.sections.overrides);
+});
+
 test('meditación reutiliza habitChecks con respaldo, cola de sincronización y separación por cuenta',async t=>{
   t.mock.method(Date,'now',()=>new Date(2026,9,20,12).getTime());
   const s=await store();
@@ -483,4 +492,23 @@ test('refrescar Calendar elimina sólo copias vigentes y conserva historia y fec
     {section:'calendarLinks',key:'history',value:calendarLink('history','2026-10-19'),deleted:false,updatedAt:1000},
   ]);
   assert.deepEqual(s.getLifeBackup().sections.calendarEvents,{history:historical,outside,fresh:current});
+});
+
+
+test('metadatos de revisión mensual se guardan por cuenta sin cambiar sesiones ni copias antiguas',async()=>{
+  const s=await store();
+  const initial={...settings,trainingPlanId:'',trainingPlanStartedOn:'',trainingPlanReviewedOn:'',trainingPlanReviewEnabled:true,trainingPlanReviewTime:'09:00'};
+  const [,setSettings]=s.useLifeState('settings',initial);s.useLifeState('gymSessions',{});
+  const oldSession=training.createTrainingSession({id:'saved-history',date:'2026-10-20',week:1,day:1,now:1000});
+  s.restoreLifeBackup({version:1,sections:{settings:{childName:'Nombre anterior'},gymSessions:{[oldSession.id]:oldSession}}});
+  const before=structuredClone(s.getLifeBackup().sections.gymSessions);
+  setSettings(current=>({...current,trainingPlanId:'new-plan',trainingPlanStartedOn:'2026-11-05',trainingPlanReviewedOn:'2026-11-05',trainingPlanReviewEnabled:true,trainingPlanReviewTime:'09:15'}));
+  const exported=s.getLifeBackup();
+  assert.equal(exported.sections.settings.trainingPlanId,'new-plan');assert.equal(exported.sections.settings.trainingPlanReviewTime,'09:15');
+  assert.deepEqual(exported.sections.gymSessions,before);
+  for(const invalid of [{trainingPlanId:'../bad'},{trainingPlanStartedOn:'2026-02-30'},{trainingPlanReviewedOn:'bad'},{trainingPlanReviewEnabled:'yes'},{trainingPlanReviewTime:'25:00'}])assert.throws(()=>s.restoreLifeBackup({version:1,sections:{settings:invalid}}));
+  assert.deepEqual(s.getLifeBackup().sections.gymSessions,before);
+  s.restoreLifeBackup({version:1,sections:{settings:{childName:'Copia vieja sin metadatos'}}});
+  assert.equal(s.getLifeBackup().sections.settings.trainingPlanId,'new-plan');
+  assert.deepEqual(s.getLifeBackup().sections.gymSessions,before);
 });

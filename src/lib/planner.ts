@@ -49,6 +49,11 @@ export type Settings = {
   gymDays: number[];
   gymDurationMin: number;
   gymTravelMin: number;
+  trainingPlanId: string;
+  trainingPlanStartedOn: string;
+  trainingPlanReviewedOn: string;
+  trainingPlanReviewEnabled: boolean;
+  trainingPlanReviewTime: string;
   showerMin: number;
   danceTransport: 'pending' | 'me' | 'other';
   danceTravelMin: number;
@@ -74,6 +79,8 @@ export type ExtraEvent = {
 };
 
 export type DayOverride = {
+  /** A short optional practice for this date, without changing the weekly pattern. */
+  gymOptional?: boolean;
   /** This Monday only: skip the usual office trip, without moving it to another day. */
   skipPewen?: boolean;
   schoolClosed?: boolean;
@@ -162,6 +169,11 @@ export const defaults: Settings = {
   gymDays: [0, 1, 2, 3, 4, 5, 6],
   gymDurationMin: 75,
   gymTravelMin: 15,
+  trainingPlanId: '',
+  trainingPlanStartedOn: '',
+  trainingPlanReviewedOn: '',
+  trainingPlanReviewEnabled: true,
+  trainingPlanReviewTime: '09:00',
   showerMin: 15,
   danceTransport: 'me',
   danceTravelMin: 30,
@@ -261,6 +273,11 @@ function normalize(input: Settings): Settings {
   s.recordingDay = number(s.recordingDay, defaults.recordingDay, 0, 6);
   s.sleepHours = typeof s.sleepHours === 'number' && Number.isFinite(s.sleepHours) ? Math.min(12, Math.max(4, s.sleepHours)) : defaults.sleepHours;
   s.anchorMonday = validDate(s.anchorMonday) ? s.anchorMonday : defaults.anchorMonday;
+  s.trainingPlanId = typeof s.trainingPlanId === 'string' && /^[a-zA-Z0-9_-]{1,120}$/.test(s.trainingPlanId) ? s.trainingPlanId : '';
+  s.trainingPlanStartedOn = validDate(s.trainingPlanStartedOn) ? s.trainingPlanStartedOn : '';
+  s.trainingPlanReviewedOn = validDate(s.trainingPlanReviewedOn) ? s.trainingPlanReviewedOn : '';
+  s.trainingPlanReviewEnabled = typeof s.trainingPlanReviewEnabled === 'boolean' ? s.trainingPlanReviewEnabled : defaults.trainingPlanReviewEnabled;
+  s.trainingPlanReviewTime = formatTime(time(s.trainingPlanReviewTime,defaults.trainingPlanReviewTime));
   for (const key of ['schoolStart', 'cordobaArrival', 'recordingStart', 'defaultWake', 'preferredBedtime', 'mondayEveningStart', 'mondayEveningEnd', 'mondaySoloDeparture', 'mondaySoloArrival'] as const) s[key] = formatTime(time(s[key], defaults[key]));
   for (const key of ['mealPrepTuesdayStart','mealPrepFridayStart'] as const) s[key] = typeof s[key] === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s[key]) ? s[key] : '';
   s.gymDays = weekdayList(s.gymDays, defaults.gymDays);
@@ -498,7 +515,7 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   const preferredMondayDeparture = 8 * 60 + 15 - s.gymTravelMin;
   const preferredTuesdayDeparture = 8 * 60 + 30 - s.gymTravelMin;
   const tuesdayTraining = weekday === 2 && s.gymDays.includes(2);
-  const morningTraining = (weekday === 3 || weekday === 5) && s.gymDays.includes(weekday);
+  const morningTraining = [3,4,5].includes(weekday) && (s.gymDays.includes(weekday)||override.gymOptional===true);
   // The current model reserves the trip home after drop-off, then a separate gym trip.
   // Do not infer an unconfigured direct route from the school to the gym.
   const schoolJourneyEnd = events.find(event => event.id === 'school-back')?.end
@@ -539,8 +556,10 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
   meal('meal-snack', 'Merienda', 15, Math.min(960, snackBeforeDeparture), 1125, Math.min(990, snackBeforeDeparture));
   meal('meal-dinner', 'Cenar', 30, 1170, 1380, 1230);
 
-  if (s.gymDays.includes(weekday) || skipPewen) {
-    const duration = s.gymTravelMin * 2 + s.gymDurationMin + s.showerMin;
+  if (s.gymDays.includes(weekday) || skipPewen || override.gymOptional===true) {
+    const optionalTraining=override.gymOptional===true||(!s.gymDays.includes(weekday)&&skipPewen&&!!s.trainingPlanId);
+    const gymMinutes=optionalTraining?35:s.gymDurationMin;
+    const duration = s.gymTravelMin * 2 + gymMinutes + s.showerMin;
     const preferred = skipPewen ? preferredMondayDeparture : tuesdayTraining ? preferredTuesdayDeparture : morningTraining ? preferredMorningDeparture : 1020;
     const slot = findSlot(duration, Math.max(wakeTime + 30, 420, morningTraining ? preferredMorningDeparture : 0), morningTraining ? 12 * 60 : 1290, preferred, busy(true, true));
     if (slot === undefined) warnings.push(morningTraining
@@ -553,10 +572,10 @@ export function buildDay(dateISO: string, input: Settings, overrides: Record<str
         warnings.push(`Entrenamiento: las 08:15 no son posibles con ${schoolBlocks ? 'los viajes del jardín' : 'los compromisos y cuidados de hoy'}. Se ubicó a las ${formatTime(slot+s.gymTravelMin)}, con el traslado, la vuelta y la ducha completos.`);
       }
       if (tuesdayTraining && slot !== preferred) warnings.push(`Entrenamiento del martes: las 08:30 no son posibles con los compromisos y cuidados de hoy. Se ubicó a las ${formatTime(slot+s.gymTravelMin)}, con la sesión, los traslados y la ducha completos.`);
-      if (morningTraining && slot !== preferred) warnings.push(`Entrenamiento del ${weekday === 3 ? 'miércoles' : 'viernes'}: después del jardín, los compromisos de hoy permiten empezar a las ${formatTime(slot+s.gymTravelMin)}. Se conserva la mañana con la sesión, los traslados y la ducha completos.`);
+      if (morningTraining && slot !== preferred) warnings.push(`Entrenamiento del ${weekday === 3 ? 'miércoles' : weekday === 4 ? 'jueves' : 'viernes'}: después del jardín, los compromisos de hoy permiten empezar a las ${formatTime(slot+s.gymTravelMin)}. Se conserva la mañana con la sesión, los traslados y la ducha completos.`);
       let cursor = slot;
       push('gym-out', 'Ir a entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de ida.`, false);
-      push('gym', 'Entrenar', cursor, cursor += s.gymDurationMin, 'gym', skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.' : tuesdayTraining ? 'Martes: preferencia a las 08:30, antes de la tanda de cocina y respetando tus compromisos. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.' : morningTraining ? `${weekday === 3 ? 'Miércoles' : 'Viernes'} por la mañana: después de la entrega en el jardín y el regreso a casa cuando te corresponden. Preferencia a las 08:30, ajustada a los traslados reales. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.` : 'Bloque de entrenamiento. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.', false);
+      push('gym', optionalTraining?'Práctica opcional · técnica y core':'Entrenar', cursor, cursor += gymMinutes, 'gym', optionalTraining?'Práctica corta de 35 minutos, cuando tenga lugar. Elegí la rutina opcional en Entrenar; no reemplaza una sesión principal ni cambia su rotación.':skipPewen ? 'Lunes sin [DESTINO]: entrenamiento con preferencia a las 08:15, acomodado a los compromisos reales. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.' : tuesdayTraining ? 'Martes: preferencia a las 08:30, antes de la tanda de cocina y respetando tus compromisos. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.' : morningTraining ? `${weekday === 3 ? 'Miércoles' : weekday === 4 ? 'Jueves' : 'Viernes'} por la mañana: después de la entrega en el jardín y el regreso a casa cuando te corresponden. Preferencia a las 08:30, ajustada a los traslados reales. Abrí la sesión guiada en Mi Vida para registrar series, cargas y descansos.` : 'Bloque de entrenamiento. Abrí la sesión guiada en Mi Vida para elegir tu rutina y registrar series, cargas y descansos.', false);
       push('gym-back', 'Volver de entrenar', cursor, cursor += s.gymTravelMin, 'travel', `${s.gymTravelMin} min de regreso.`, false);
       push('gym-shower', 'Ducha y cambio', cursor, cursor + s.showerMin, 'personal', `${s.showerMin} min después de entrenar.`, false);
     }

@@ -8,7 +8,7 @@ export type AlarmSettingsProps = {settings:Settings;overrides:Record<string,DayO
 const dateTime = (epoch:number) => new Date(epoch).toLocaleString('es-AR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 const dateLabel = (date:string) => new Date(date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'long'});
 const errorText = (error:unknown) => error instanceof Error ? error.message : 'Android no pudo completar la operación. Volvé a abrir Mi Vida y revisá los permisos.';
-const alarmLabel = (alarm:AlarmPreview) => alarm.source === 'bedtime-prepare' ? 'Preparación para dormir · 45 min antes' : alarm.source === 'bedtime' ? 'Hora de acostarte' : alarm.source === 'training-end' ? 'Fin del bloque de entrenamiento' : alarm.kind === 'wake' ? 'Alarma para despertar' : 'Recordatorio';
+const alarmLabel = (alarm:AlarmPreview) => alarm.source === 'bedtime-prepare' ? 'Preparación para dormir · 45 min antes' : alarm.source === 'bedtime' ? 'Hora de acostarte' : alarm.source === 'training-end' ? 'Fin del bloque de entrenamiento' : alarm.source === 'training-review' ? 'Revisión mensual del plan' : alarm.kind === 'wake' ? 'Alarma para despertar' : 'Recordatorio';
 
 export function AlarmSettings({settings,overrides,extras,done,externalOccurrences,scope,cloudReady,hidden=false}:AlarmSettingsProps) {
   const native = isAndroidAlarms();
@@ -23,7 +23,8 @@ export function AlarmSettings({settings,overrides,extras,done,externalOccurrence
   const mounted = useRef(true);
   const batch = useMemo(() => buildAlarmBatch({settings,overrides,extras,done,externalOccurrences,preferences:prefs,now}),[settings,overrides,extras,done,externalOccurrences,prefs,now]);
   const signature = JSON.stringify(cloudReady ? batch.notifications : []);
-  const hasPreferences = prefs.wake || prefs.bedtime || prefs.agenda || prefs.creatine || prefs.trainingEnd || prefs.custom.some(alarm => alarmEpoch(alarm.date,alarm.time)>now);
+  const nextTrainingReview=batch.preview.find(alarm=>alarm.source==='training-review');
+  const hasPreferences = prefs.wake || prefs.bedtime || prefs.agenda || prefs.creatine || prefs.trainingEnd || !!nextTrainingReview || prefs.custom.some(alarm => alarmEpoch(alarm.date,alarm.time)>now);
 
   useEffect(() => {mounted.current=true;return () => {mounted.current=false;};},[]);
   useEffect(() => {setSaved({scope,prefs:loadAlarmPreferences(scope)});setProgrammed(null);setMessage('');setError('');},[scope]);
@@ -82,6 +83,7 @@ export function AlarmSettings({settings,overrides,extras,done,externalOccurrence
   const nextSleep=batch.preview.filter(alarm=>alarm.source==='bedtime-prepare'||alarm.source==='bedtime').slice(0,2);
   return <section className="panel alarm-settings" hidden={hidden} aria-labelledby="alarms-heading">
     <div className="section-title"><h2 id="alarms-heading">Alarmas en tu celular</h2><span className={'alarm-badge '+(confirmed && batch.notifications.length?'alarm-ready':'')}>{!native?'Versión Android':!cloudReady?'Esperando tu agenda':programming?'Actualizando…':!hasPreferences?'Desactivadas':!status?.granted?'Faltan permisos':confirmed?`${status.pending} programadas`:'Por confirmar'}</span></div>
+    {nextTrainingReview&&<p className="alarm-note">Próxima revisión mensual del plan: {dateTime(nextTrainingReview.at)}. {native?'Se preparan los próximos tres avisos mensuales en Android, por separado de los 14 días de agenda.':'El aviso sonoro se prepara al abrir la APK.'} La revisión no cambia ni reinicia tus registros. Podés ajustar este aviso en Ajustes.</p>}
     {!native ? <><p className="muted">La APK de Mi Vida puede despertarte y avisarte con la pantalla bloqueada. Instalá la versión Android y abrí esta sección desde la app para activar las alarmas. La web conserva tu agenda y tu diario.</p><p className="alarm-note">Para cerrar el día, «Prepararme y acostarme» reúne dos avisos diarios: 45 minutos antes y a la hora propuesta para dormir, según el despertar del día siguiente. Suenan como recordatorios en la APK; el despertador mantiene su sonido habitual.</p></> : <>
       <p className="muted">Las alarmas que programes quedan en Android y pueden sonar con la app cerrada y sin conexión. Tus elecciones de alarmas y avisos se guardan sólo en este celular, por cuenta.</p>
       {!cloudReady && <p className="alarm-note">Esperando confirmar tu cuenta para revisar su agenda. Las alarmas ya programadas en Android se conservan durante la carga.</p>}

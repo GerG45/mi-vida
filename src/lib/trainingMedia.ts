@@ -1,4 +1,5 @@
-/** Tutorials verified against YouTube's public oEmbed metadata on 2026-10-19.
+/** Original tutorials verified against YouTube's public oEmbed metadata on 2026-10-19.
+ * Assisted-machine tutorial added 2026-11-05 from PureGym's official equipment link.
  * Original plan preserved; videos are external demonstrations, never auto-played.
  */
 export interface TrainingTutorial {
@@ -12,6 +13,17 @@ export interface TrainingMedia {
 }
 
 export const TRAINING_MEDIA: Record<string, TrainingMedia> = {
+  "plan-assisted-pullup": {
+    exerciseId:"plan-assisted-pullup",
+    illustration:"./training/assisted-pullup.svg",
+    posterAlt:"Dominada asistida en máquina · ilustración orientativa",
+    tutorials:[{
+      id:"assisted-machine",label:"Dominada asistida en máquina",videoId:"wFj808u2HWU",
+      title:"How To Use The Assisted Pull Up Machine",channel:"PureGym",
+      url:"https://www.youtube.com/watch?v=wFj808u2HWU",thumbnail:"https://i.ytimg.com/vi/wFj808u2HWU/hqdefault.jpg",
+      language:"en",languageLabel:"Inglés",illustration:"./training/assisted-pullup.svg",
+    }],
+  },
   "d1-e1": {
     "exerciseId": "d1-e1",
     "illustration": "./training/goblet.svg",

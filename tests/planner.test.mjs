@@ -23,6 +23,29 @@ const settings = (patch = {}) => ({
 });
 const intersects = (a, b) => a.start < b.end && b.start < a.end;
 
+test('el nuevo esquema conserva martes y jueves por la mañana y libera el viernes de cocina',()=>{
+  const config=settings({gymDays:[2,4,6],gymDurationMin:90,trainingPlanId:'pullups-core-v1',mealPrepTuesdayStart:'10:30',mealPrepFridayStart:'10:30'});
+  for(const date of ['2026-11-05','2026-11-10','2026-11-12','2026-11-17','2026-11-19']){
+    const plan=buildDay(date,config),gym=plan.events.find(event=>event.id==='gym');
+    assert(gym,date);assert.equal(formatTime(gym.start),'08:30');assert.equal(formatTime(gym.end),'10:00');
+    const cooking=plan.events.find(event=>event.kind==='cooking');
+    if(cooking)assert(!intersects(gym,cooking));
+  }
+  const friday=buildDay('2026-11-06',config);
+  assert(!friday.events.some(event=>event.id==='gym'));
+  assert.equal(formatTime(friday.events.find(event=>event.kind==='cooking').start),'10:30');
+});
+
+test('la cuarta práctica es puntual, corta y conserva cuidados y compromisos',()=>{
+  const config=settings({gymDays:[2,4,6],gymDurationMin:90,trainingPlanId:'pullups-core-v1'}),date='2026-11-11';
+  assert(!buildDay(date,config).events.some(event=>event.id==='gym'));
+  const overrides={[date]:{gymOptional:true}},original=structuredClone(overrides),plan=buildDay(date,config,overrides);
+  const gym=plan.events.find(event=>event.id==='gym');assert(gym);assert.equal(gym.end-gym.start,35);
+  assert.match(gym.title,/opcional/);assert.equal(formatTime(gym.start),'08:35');
+  for(const other of plan.events.filter(event=>event.fixed&&event.busy!==false&&event.id!==gym.id))assert(!intersects(gym,other));
+  assert.deepEqual(overrides,original);assert(!buildDay('2026-11-18',config,overrides).events.some(event=>event.id==='gym'));
+});
+
 test('defaults públicos no activan una agenda personal hasta elegir habilitarla', () => {
   assert.equal(defaults.scheduleEnabled, false);
   assert.equal(defaults.familyConfirmed, false);

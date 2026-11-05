@@ -2,13 +2,14 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { addDays, buildDay, formatTime, isoDate, type DayOverride, type ExtraEvent, type Settings } from './planner';
 import { getNightPlan, SLEEP_PREPARATION_MINUTES } from './sleep';
 import type { CalendarEventOccurrence } from './calendarModel';
+import {getTrainingPlanReviewDates} from './trainingPlanReview';
 
 export type AlarmKind = 'wake' | 'reminder';
 export type DeviceAlarm = { id: string; title: string; date: string; time: string; kind: AlarmKind };
 export type AlarmCategory = 'travel' | 'school' | 'work' | 'recording' | 'gym' | 'personal' | 'family';
 export type AlarmPreferences = { wake: boolean; bedtime: boolean; agenda: boolean; creatine: boolean; trainingEnd: boolean; beforeMin: number; categories: AlarmCategory[]; custom: DeviceAlarm[] };
 export type ScheduledAlarm = { id: number; at: number; title: string; body: string; kind: AlarmKind };
-export type AlarmPreview = ScheduledAlarm & { key: string; source: 'wake' | 'bedtime' | 'bedtime-prepare' | 'agenda' | 'creatine' | 'training-end' | 'custom' };
+export type AlarmPreview = ScheduledAlarm & { key: string; source: 'wake' | 'bedtime' | 'bedtime-prepare' | 'agenda' | 'creatine' | 'training-end' | 'training-review' | 'custom' };
 export type AlarmBatch = { notifications: ScheduledAlarm[]; preview: AlarmPreview[]; through: string; omitted: number };
 export type AlarmPermissionStatus = { granted: boolean; notifications: boolean; exactAlarms: boolean; fullScreen: boolean; alarmVolume: number; alarmMaxVolume: number; pending: number; stored: number; nextAt: number | null; lastError: string | null };
 export interface LifeRemindersPlugin {
@@ -71,6 +72,12 @@ export function buildAlarmBatch({settings,overrides = {},extras = [],done = {},p
   const prefs = normalizeAlarmPreferences(preferences), today = isoDate(new Date(now)), through = addDays(today,13);
   const candidates: Omit<AlarmPreview,'id'>[] = [];
   const push = (key:string,at:number,title:string,body:string,kind:AlarmKind,source:AlarmPreview['source']) => { if (Number.isFinite(at) && at > now) candidates.push({key,at,title:title.slice(0,180),body:body.slice(0,450),kind,source}); };
+  const reviewTime=typeof settings.trainingPlanReviewTime==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.trainingPlanReviewTime)?settings.trainingPlanReviewTime:'09:00';
+  // Keep three future monthly reminders, independently of the fourteen-day agenda.
+  // An overdue review is shown in the app; old months never replay as alarms.
+  for(const date of getTrainingPlanReviewDates(settings,today,4).filter(date=>alarmEpoch(date,reviewTime)>now).slice(0,3)) {
+    push(`training-review:${settings.trainingPlanId}:${date}`,alarmEpoch(date,reviewTime),'Es momento de revisar tu plan de entrenamiento','Revisá cómo te fue este mes y decidí si querés renovar el plan. Tus sesiones, cargas y notas se conservan; este aviso no modifica ni reinicia tu entrenamiento.','reminder','training-review');
+  }
   if (settings.scheduleEnabled === true && prefs.bedtime) for (let offset=-1;offset<14;offset++) {
     // Each phase is bounded by its own actual date: a midnight bedtime can have
     // its preparation on the previous day, including the last day of this window.
@@ -102,7 +109,7 @@ export function buildAlarmBatch({settings,overrides = {},extras = [],done = {},p
   for (const alarm of prefs.custom) push(`custom:${alarm.id}`,alarmEpoch(alarm.date,alarm.time),alarm.title,'Recordatorio puntual de Mi Vida.',alarm.kind,'custom');
   // Protect punctual alarms, waking and both sleep phases before filling the remaining agenda slots.
   const custom = candidates.filter(c => c.source === 'custom').sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
-  const protectedSources = new Set<AlarmPreview['source']>(['wake','bedtime','bedtime-prepare']);
+  const protectedSources = new Set<AlarmPreview['source']>(['wake','bedtime','bedtime-prepare','training-review']);
   const protectedAutomatic = candidates.filter(c => protectedSources.has(c.source)).sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
   const automatic = candidates.filter(c => c.source !== 'custom'&&!protectedSources.has(c.source)).sort((a,b) => a.at-b.at || a.key.localeCompare(b.key));
   const selected = [...custom,...protectedAutomatic,...automatic.slice(0,Math.max(0,200-custom.length-protectedAutomatic.length))];

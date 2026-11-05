@@ -11,6 +11,7 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 - Agenda que calcula el despertar a partir del primer compromiso, la preparación y los viajes, y cuándo acostarse para despertar al día siguiente. Alternancia familiar de dos semanas, excepciones por fecha y detección de cruces.
 - Listas de Trabajo / proyectos por fecha: prepararlas con anticipación o durante el bloque, completar checks y asignar minutos opcionales a cada paso. Cronómetro con pausa, edición, orden y recuperación de tareas quitadas. Los registros se sincronizan y entran en el reporte semanal.
 - Diario de mañana, cierre y escritura libre, con historial, búsqueda y reporte semanal descargable para revisar tus registros.
+- Reporte de uso de 7, 28 o 90 días: registros disponibles, entrenamientos por día y semana, y sesiones sin cierre sin duraciones inventadas. Ver [alcance y privacidad](docs/USAGE-REPORT.md).
 - Hábitos con señal y versión mínima, sin penalizar una pausa.
 - Ideas y reflexiones inspiradas en James Clear, Robin Sharma y Silo, identificadas como redacción original; citas breves y fuentes con páginas en el diario.
 - Meditación diaria sin horario fijo: Experiencia de Paz en seis pasos, registro manual, historial por fecha y reporte semanal. Ver [uso, datos y fuentes](docs/MEDITATION.md).
@@ -24,6 +25,7 @@ También incluye una APK Android con despertador y recordatorios locales. Ver [i
 - Compras de súper en una sección independiente: productos, cantidades, categorías y checks, guardados por cuenta sin depender de la fecha explorada ni del meal prep.
 - Descanso en Android: dos avisos diarios, 45 minutos antes y a la hora propuesta para acostarte, adaptados al despertar siguiente. Conservan el sonido del despertador; usan el tono de recordatorio.
 - Entrenamiento de miércoles y viernes por la mañana, después del jardín. En Android, avisos de descansos y series cronometradas con la pantalla bloqueada y un aviso independiente al terminar el bloque previsto del gimnasio. Ver [horarios, permisos y prueba en el teléfono](docs/TRAINING.md).
+- Plan mensual opcional de dominadas asistidas y core: tres días principales, un cuarto corto, descansos efectivos de dos minutos y aviso mensual para revisar la próxima etapa. El historial y las rutinas originales se conservan.
 
 La interfaz usa tipografías del dispositivo, colores cálidos y animaciones CSS breves. La preferencia del sistema de reducir movimiento desactiva las animaciones y transiciones. Los cambios visuales conservan las herramientas y los datos existentes.
 
